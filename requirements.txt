@@ -1,7 +1,7 @@
 streamlit
 pandas
 qrcode
+pillow
 fpdf
-xlsxwriter
 streamlit-qrcode-scanner
-Pillow
+cloudinary
