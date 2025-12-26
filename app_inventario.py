@@ -49,6 +49,7 @@ if st.sidebar.button("⚠️ RESET TOTALE DATABASE"):
             conn = db.connetti_db()
             cursor = conn.cursor()
             cursor.execute("DELETE FROM inventario")
+            cursor.execute("DELETE FROM posizioni")
             conn.commit()
             st.sidebar.success("✅ Database svuotato correttamente!")
             st.rerun()
@@ -77,17 +78,17 @@ def salva_foto_cloudinary(foto, nome_scatola, tipo):
 if scelta == "🏠 Home":
     st.title("🏠 Inventario Casa VHD")
     inv = db.visualizza_inventario()
+    pos_list = db.visualizza_posizioni()
     
     c1, c2, c3 = st.columns(3)
     with c1: st.metric("📦 Scatole Totali", len(inv))
-    with c2: st.metric("📍 Postazioni", len(db.visualizza_posizioni()))
+    with c2: st.metric("📍 Postazioni", len(pos_list))
     with c3: st.metric("⚠️ Da Allocare", len([s for s in inv if s[10] == "DA DEFINIRE"]))
     
     st.write("---")
     
     if inv:
         st.subheader("📥 Esporta Dati")
-        # Creazione DataFrame per Excel
         df = pd.DataFrame(inv, columns=["ID", "Nome", "Descrizione", "URL Foto", "Cima", "F_Cima", "Centro", "F_Centro", "Fondo", "F_Fondo", "Zona", "Ubicazione", "Proprietario"])
         
         buffer = io.BytesIO()
@@ -135,3 +136,40 @@ elif scelta == "➕ Nuova Scatola":
                     st.success(f"Scatola {nome} registrata!")
             else:
                 st.error("Il nome è obbligatorio!")
+
+elif scelta == "⚙️ Configura Magazzino":
+    st.title("⚙️ Configura Magazzino")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("📍 Aggiungi Nuova Zona")
+        nuova_zona = st.text_input("Zona (es. Garage, Cantina)")
+        nuova_ubi = st.text_input("Dettaglio (es. Scaffale A, Mobile 1)")
+        if st.button("REGISTRA POSIZIONE"):
+            if nuova_zona and nuova_ubi:
+                db.aggiungi_posizione(nuova_zona, nuova_ubi)
+                st.success("Posizione registrata!")
+                st.rerun()
+    with col2:
+        st.subheader("📋 Posizioni Attuali")
+        posizioni = db.visualizza_posizioni()
+        if posizioni:
+            for p in posizioni:
+                st.write(f"• **{p[1]}**: {p[2]}")
+        else:
+            st.info("Nessuna posizione configurata.")
+
+elif scelta == "🔄 Alloca/Sposta":
+    st.title("🔄 Alloca o Sposta Scatole")
+    inv = db.visualizza_inventario()
+    pos = db.visualizza_posizioni()
+    if inv and pos:
+        scatola_sel = st.selectbox("Seleziona Scatola", [f"{s[0]} - {s[1]}" for s in inv])
+        dest_sel = st.selectbox("Destinazione", [f"{p[1]} | {p[2]}" for p in pos])
+        if st.button("CONFERMA SPOSTAMENTO"):
+            id_s = int(scatola_sel.split(" - ")[0])
+            z, u = dest_sel.split(" | ")
+            db.aggiorna_posizione_scatola(id_s, z, u)
+            st.success("Spostato!")
+            st.rerun()
+    else:
+        st.warning("Assicurati di avere sia scatole che posizioni create!")
