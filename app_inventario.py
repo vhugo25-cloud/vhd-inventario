@@ -25,6 +25,7 @@ st.markdown("""
 db = InventarioDB()
 if not os.path.exists("foto_scatole"): os.makedirs("foto_scatole")
 
+# Liste personalizzate basate sulle tue richieste
 utenti = ["Victor", "Evelyn", "Daniel", "Carly", "Rebby"]
 menu = ["🏠 Home", "🔍 Cerca ed Elimina", "📸 Scanner QR", "➕ Nuova Scatola", "🔄 Alloca/Sposta", "⚙️ Configura Magazzino", "🖨️ Stampa"]
 scelta = st.sidebar.selectbox("Menu Principale", menu)
@@ -70,7 +71,8 @@ elif scelta == "📸 Scanner QR":
                     st.write(f"**👤 Proprietario:** {prop}")
                     st.info(f"📍 Posizione Attuale: {z_att} - {u_att}")
                 with c_fot:
-                    if f_main: st.image(f_main, use_container_width=True)
+                    if f_main and os.path.exists(f_main): 
+                        st.image(f_main, use_container_width=True)
                 st.divider()
                 st.subheader("🔄 Sposta Scatola")
                 col_z, col_u = st.columns(2)
@@ -120,12 +122,21 @@ elif scelta == "🔍 Cerca ed Elimina":
     for r in ris:
         with st.expander(f"📦 {r[1]} | Posizione: {r[10]}-{r[11]}"):
             c1, c2 = st.columns([1, 2])
-            if r[3]: c1.image(r[3], width=200)
+            
+            # --- SICUREZZA FOTO: Se il file non esiste, mostra un avviso ---
+            if r[3] and os.path.exists(r[3]): 
+                c1.image(r[3], width=200)
+            elif r[3]:
+                c1.warning("📸 Foto non trovata")
+            
             c2.write(f"**Descrizione:** {r[2]}")
+            c2.write(f"**Proprietario:** {r[12]}")
+            
             s1, s2, s3 = st.columns(3)
-            if r[5]: s1.image(r[5], caption=f"Cima: {r[4]}")
-            if r[7]: s2.image(r[7], caption=f"Centro: {r[6]}")
-            if r[9]: s3.image(r[9], caption=f"Fondo: {r[8]}")
+            if r[5] and os.path.exists(r[5]): s1.image(r[5], caption=f"Cima: {r[4]}")
+            if r[7] and os.path.exists(r[7]): s2.image(r[7], caption=f"Centro: {r[6]}")
+            if r[9] and os.path.exists(r[9]): s3.image(r[9], caption=f"Fondo: {r[8]}")
+            
             if st.button("🗑️ ELIMINA SCATOLA", key=f"del_{r[0]}"):
                 db.elimina_scatola(r[0]); st.rerun()
 
@@ -149,21 +160,15 @@ elif scelta == "⚙️ Configura Magazzino":
     conn.close()
 
     if not df_pos.empty:
-        # Pulizia nomi colonne
         df_pos.columns = [c.upper() for c in df_pos.columns]
-        
         for index, row in df_pos.iterrows():
-            # Logica "Flessibile" per i nomi delle colonne
             c_codice = row.get('ID_POSIZIONE', row.get('CODICE', 'N/A'))
-            # Prova a cercare 'NOME_ZONA', se non esiste cerca 'ZONA'
             c_zona = row.get('NOME_ZONA', row.get('ZONA', 'N/A'))
-            
             c1, c2, c3 = st.columns([2, 2, 1])
             c1.write(f"**Codice:** {c_codice}")
             c2.write(f"**Zona:** {c_zona}")
             if c3.button("Elimina", key=f"btn_del_{c_codice}_{index}"):
                 conn = db.connetti_db()
-                # Elimina usando la colonna corretta (ID_POSIZIONE)
                 col_id = 'ID_POSIZIONE' if 'ID_POSIZIONE' in df_pos.columns else 'id_posizione'
                 conn.execute(f"DELETE FROM posizioni WHERE {col_id} = ?", (c_codice,))
                 conn.commit(); conn.close()
