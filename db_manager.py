@@ -1,13 +1,66 @@
 import sqlite3
-DB_NAME = 'magazzino_casa.db'
-def connetti_db(): return sqlite3.connect(DB_NAME)
-def crea_tabelle():
-    conn = connetti_db()
-    cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS POSIZIONI (ID_POSIZIONE TEXT PRIMARY KEY, DESCRIZIONE TEXT NOT NULL)''')
-    cursor.execute('''CREATE TABLE IF NOT EXISTS SCATOLE (ID_SCATOLA TEXT PRIMARY KEY, CONTENUTO TEXT NOT NULL, POSIZIONE_ATTUALE TEXT, COORDINATE TEXT, PROPRIETARIO TEXT, FOTO_COPERTINA TEXT)''')
-    cursor.execute('''CREATE TABLE IF NOT EXISTS CONTENUTO_DETTAGLIO (ID_DETTAGLIO INTEGER PRIMARY KEY AUTOINCREMENT, ID_SCATOLA TEXT, DESCRIZIONE_OGGETTO TEXT NOT NULL, FOTO_PATH TEXT, STRATO TEXT)''')
-    conn.commit(); conn.close()
-def esegui_query(query, parametri=()):
-    conn = connetti_db(); cursor = conn.cursor(); cursor.execute(query, parametri); r = cursor.fetchall(); conn.commit(); conn.close()
-    return r
+
+class InventarioDB:
+    def __init__(self, db_name="magazzino_casa.db"):
+        self.db_name = db_name
+        self.crea_tabelle()
+
+    def connetti_db(self):
+        return sqlite3.connect(self.db_name, check_same_thread=False)
+
+    def crea_tabelle(self):
+        conn = self.connetti_db()
+        cursor = conn.cursor()
+        cursor.execute('''CREATE TABLE IF NOT EXISTS POSIZIONI 
+                          (ID_POSIZIONE TEXT PRIMARY KEY, ZONA TEXT)''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS inventario 
+                          (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                           nome_scatola TEXT NOT NULL, 
+                           desc_generale TEXT,
+                           foto_principale TEXT,
+                           strato_cima TEXT, foto_cima TEXT,
+                           strato_centro TEXT, foto_centro TEXT,
+                           strato_fondo TEXT, foto_fondo TEXT,
+                           zona TEXT, 
+                           ubicazione TEXT,
+                           proprietario TEXT)''')
+        conn.commit()
+        conn.close()
+
+    def aggiungi_scatola(self, nome, desc, f_main, cima, f_cima, centro, f_centro, fondo, f_fondo, zona, ubicazione, proprietario):
+        conn = self.connetti_db()
+        query = """INSERT INTO inventario 
+                   (nome_scatola, desc_generale, foto_principale, strato_cima, foto_cima, strato_centro, foto_centro, strato_fondo, foto_fondo, zona, ubicazione, proprietario) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+        conn.execute(query, (nome, desc, f_main, cima, f_cima, centro, f_centro, fondo, f_fondo, zona, ubicazione, proprietario))
+        conn.commit()
+        conn.close()
+
+    def elimina_scatola(self, id_scatola):
+        conn = self.connetti_db()
+        conn.execute("DELETE FROM inventario WHERE id = ?", (id_scatola,))
+        conn.commit(); conn.close()
+
+    def visualizza_inventario(self):
+        conn = self.connetti_db()
+        res = conn.execute("SELECT * FROM inventario").fetchall()
+        conn.close()
+        return res
+
+    def cerca_scatola(self, termine):
+        conn = self.connetti_db()
+        c = f"%{termine}%"
+        res = conn.execute("SELECT * FROM inventario WHERE nome_scatola LIKE ? OR desc_generale LIKE ? OR zona LIKE ? OR ubicazione LIKE ? OR strato_cima LIKE ? OR strato_centro LIKE ? OR strato_fondo LIKE ?", (c,c,c,c,c,c,c)).fetchall()
+        conn.close()
+        return res
+    
+    def visualizza_posizioni(self):
+        conn = self.connetti_db()
+        res = conn.execute("SELECT * FROM POSIZIONI").fetchall()
+        conn.close()
+        return res
+
+    def aggiungi_posizione(self, id_p, zona):
+        conn = self.connetti_db()
+        conn.execute("INSERT OR REPLACE INTO POSIZIONI VALUES (?, ?)", (id_p, zona))
+        conn.commit(); conn.close()

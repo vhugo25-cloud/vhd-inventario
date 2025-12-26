@@ -3,3 +3,5 @@ pandas
 qrcode
 fpdf
 xlsxwriter
+streamlit-qrcode-scanner
+Pillow
