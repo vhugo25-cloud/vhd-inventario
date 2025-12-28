@@ -23,7 +23,7 @@ except:
 
 st.set_page_config(page_title="Inventario Casa VHD", layout="wide")
 
-# --- ESTETICA (Regola d'Oro) ---
+# --- ESTETICA (Regola d'Oro: Blu Notte e Moderno) ---
 st.markdown("""
     <style>
     .main { background-color: #f0f2f6; }
@@ -40,16 +40,13 @@ utenti = ["Victor", "Evelyn", "Daniel", "Carly", "Rebby"]
 menu = ["🏠 Home", "🔍 Cerca ed Elimina", "📸 Scanner QR", "➕ Nuova Scatola", "🔄 Alloca/Sposta", "⚙️ Configura Magazzino", "🖨️ Stampa"]
 scelta = st.sidebar.selectbox("Menu Principale", menu)
 
-# --- FUNZIONE UPLOAD BLINDATA (CON PREFISSO E DATA) ---
+# --- FUNZIONE UPLOAD CON PROTEZIONE NOME ---
 def upload_foto(file, nome, tipo):
     if file:
         try:
-            # Prende le prime 3 lettere per ordine (es: SCA, VIT)
             prefisso = (nome[:3].upper()) if len(nome) >= 3 else "BOX"
-            # Aggiunge data e ora precisa per evitare sovrascritture
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             nome_unico = f"{prefisso}_{tipo}_{timestamp}"
-            
             ris = cloudinary.uploader.upload(file, folder="VHD_Inventario", public_id=nome_unico)
             return ris['secure_url']
         except: return ""
@@ -92,25 +89,45 @@ elif scelta == "🔍 Cerca ed Elimina":
                 c2.write(f"**Proprietario:** {r[12]}")
                 c2.write(f"**Descrizione:** {r[2]}")
                 st.write(f"**Strati:** Cima: {r[4]} | Centro: {r[6]} | Fondo: {r[8]}")
-                if st.button(f"🗑️ Elimina definitiva {r[1]}", key=f"del_{r[0]}"):
+                if st.button(f"🗑️ Elimina {r[1]}", key=f"del_{r[0]}"):
                     db.elimina_scatola(r[0]); st.success("Eliminata!"); st.rerun()
 
-# --- 📸 SCANNER ---
+# --- 📸 SCANNER QR (VERSIONE SMART CON AZIONE RAPIDA) ---
 elif scelta == "📸 Scanner QR":
+    st.markdown("<h1 class='big-emoji'>📸</h1>", unsafe_allow_html=True)
     st.title("Scanner QR VHD")
     codice = qrcode_scanner(key='vhd_scanner')
+    
     if codice:
         res = db.cerca_scatola(codice)
         if res:
             r = res[0]
-            st.success(f"Trovata: {r[1]}"); st.write(f"Posizione: {r[10]} - {r[11]}")
+            st.success(f"Scatola Trovata: {r[1]}")
+            st.write(f"Posizione Attuale: **{r[10]} - {r[11]}**")
             if r[3]: st.image(r[3], width=400)
+            
+            st.write("---")
+            st.subheader("🔄 Azione Rapida: Alloca o Sposta")
+            pos = db.visualizza_posizioni()
+            if pos:
+                destinazioni = [f"{p[1]} - {p[0]}" for p in pos]
+                nuova_pos = st.selectbox("Seleziona Destinazione", destinazioni, key="quick_move")
+                if st.button("CONFERMA SPOSTAMENTO"):
+                    ids = r[0]
+                    zn, un = nuova_pos.split(" - ")
+                    db.aggiorna_posizione_scatola(ids, zn, un)
+                    st.success(f"✅ {r[1]} spostata in {zn}!")
+                    st.balloons()
+            else:
+                st.warning("Crea prima le ubicazioni in 'Configura Magazzino'.")
+        else:
+            st.error("Codice non trovato nel database.")
 
-# --- ➕ NUOVA SCATOLA (Regola d'Oro: Strati + Dropdown) ---
+# --- ➕ NUOVA SCATOLA ---
 elif scelta == "➕ Nuova Scatola":
     st.title("Registra Nuova Scatola")
     with st.form("n_s"):
-        nome = st.text_input("Nome Scatola (es: Scarpe, Viti)"); desc = st.text_area("Descrizione Generale"); prop = st.selectbox("Proprietario", utenti)
+        nome = st.text_input("Nome Scatola"); desc = st.text_area("Descrizione Generale"); prop = st.selectbox("Proprietario", utenti)
         f_m = st.file_uploader("📸 Foto Esterna", type=['jpg','png'])
         st.write("---")
         c1, c2 = st.columns([2,1])
@@ -127,14 +144,14 @@ elif scelta == "➕ Nuova Scatola":
                     db.aggiungi_scatola(nome, desc, u1, ct, u2, mt, u3, bt, u4, "DA DEFINIRE", "NON ALLOCATA", prop)
                     st.success("✅ Scatola registrata!"); st.balloons()
 
-# --- 🔄 ALLOCA ---
+# --- 🔄 ALLOCA/SPOSTA ---
 elif scelta == "🔄 Alloca/Sposta":
     st.title("Alloca o Sposta")
     inv = db.visualizza_inventario(); pos = db.visualizza_posizioni()
     if inv and pos:
         s_sel = st.selectbox("Seleziona Scatola", [f"{s[0]} | {s[1]}" for s in inv])
         p_sel = st.selectbox("Seleziona Destinazione", [f"{p[1]} - {p[0]}" for p in pos])
-        if st.button("CONFERMA SPOSTAMENTO"):
+        if st.button("SPOSTA"):
             ids = int(s_sel.split(" | ")[0]); zn, un = p_sel.split(" - ")
             db.aggiorna_posizione_scatola(ids, zn, un); st.success("Spostata!"); st.balloons()
 
@@ -150,7 +167,7 @@ elif scelta == "⚙️ Configura Magazzino":
             if pwd == "233674":
                 conn = db.connetti_db(); conn.execute("DELETE FROM inventario"); conn.execute("DELETE FROM POSIZIONI"); conn.commit(); st.rerun()
 
-# --- 🖨️ STAMPA (Layout Professionale) ---
+# --- 🖨️ STAMPA ---
 elif scelta == "🖨️ Stampa":
     st.markdown("<h1 class='big-emoji'>🖨️</h1>", unsafe_allow_html=True)
     t1, t2 = st.tabs(["📦 Scatole (2xA4)", "📍 Ubicazioni (16xA4)"])
@@ -164,13 +181,13 @@ elif scelta == "🖨️ Stampa":
                 for idx, s in enumerate(sel_s[i:i+2]):
                     y = 10 if idx == 0 else 150
                     pdf.rect(10, y, 190, 130)
-                    pdf.set_font("Arial", 'B', 45); pdf.set_xy(15, y+15); pdf.cell(0, 20, f"{s[12]}".upper(), ln=True) # Proprietario
-                    pdf.set_font("Arial", 'B', 28); pdf.set_xy(15, y+40); pdf.cell(0, 15, f"{s[1]}", ln=True) # Nome
-                    pdf.set_font("Arial", '', 14); pdf.set_xy(15, y+60); pdf.multi_cell(110, 8, f"Contenuto:\n{s[2]}") # Descrizione
+                    pdf.set_font("Arial", 'B', 45); pdf.set_xy(15, y+15); pdf.cell(0, 20, f"{s[12]}".upper(), ln=True)
+                    pdf.set_font("Arial", 'B', 28); pdf.set_xy(15, y+40); pdf.cell(0, 15, f"{s[1]}", ln=True)
+                    pdf.set_font("Arial", '', 14); pdf.set_xy(15, y+60); pdf.multi_cell(110, 8, f"Contenuto:\n{s[2]}")
                     pdf.set_font("Arial", 'I', 9); pdf.set_xy(15, y+115); pdf.cell(0, 10, f"Generato: {datetime.now().strftime('%d/%m/%Y')}")
                     qr = QRCode(box_size=5); qr.add_data(s[1]); qr.make()
                     img = qr.make_image(); img.save("t.png"); pdf.image("t.png", x=125, y=y+35, w=65)
-            st.download_button("Scarica PDF Scatole", pdf.output(dest='S').encode('latin-1'), "etichette_vhd.pdf")
+            st.download_button("Scarica PDF", pdf.output(dest='S').encode('latin-1'), "etichette_vhd.pdf")
     with t2:
         pos = db.visualizza_posizioni()
         sel_p = [p for p in pos if st.checkbox(f"Ubi {p[1]}", key=f"up_{p[0]}")]
