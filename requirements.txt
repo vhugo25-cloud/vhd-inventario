@@ -1,7 +1,8 @@
 streamlit
 pandas
-cloudinary
-openpyxl
-streamlit-qrcode-scanner
+xlsxwriter
 fpdf
+qrcode
 pillow
+cloudinary
+streamlit-qrcode-scanner

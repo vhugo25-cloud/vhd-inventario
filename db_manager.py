@@ -11,8 +11,10 @@ class InventarioDB:
     def crea_tabelle(self):
         conn = self.connetti_db()
         cursor = conn.cursor()
+        # Tabella Posizioni (ID_POSIZIONE è lo scaffale, ZONA è l'area)
         cursor.execute('''CREATE TABLE IF NOT EXISTS POSIZIONI 
                           (ID_POSIZIONE TEXT PRIMARY KEY, ZONA TEXT)''')
+        # Tabella Inventario completa di tutti i campi
         cursor.execute('''CREATE TABLE IF NOT EXISTS inventario 
                           (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                            nome_scatola TEXT NOT NULL, 
@@ -39,7 +41,8 @@ class InventarioDB:
     def elimina_scatola(self, id_scatola):
         conn = self.connetti_db()
         conn.execute("DELETE FROM inventario WHERE id = ?", (id_scatola,))
-        conn.commit(); conn.close()
+        conn.commit()
+        conn.close()
 
     def visualizza_inventario(self):
         conn = self.connetti_db()
@@ -50,17 +53,28 @@ class InventarioDB:
     def cerca_scatola(self, termine):
         conn = self.connetti_db()
         c = f"%{termine}%"
-        res = conn.execute("SELECT * FROM inventario WHERE nome_scatola LIKE ? OR desc_generale LIKE ? OR zona LIKE ? OR ubicazione LIKE ? OR strato_cima LIKE ? OR strato_centro LIKE ? OR strato_fondo LIKE ?", (c,c,c,c,c,c,c)).fetchall()
+        res = conn.execute("""SELECT * FROM inventario WHERE 
+                              nome_scatola LIKE ? OR desc_generale LIKE ? OR 
+                              zona LIKE ? OR ubicazione LIKE ? OR 
+                              strato_cima LIKE ? OR strato_centro LIKE ? OR strato_fondo LIKE ?""", 
+                           (c, c, c, c, c, c, c)).fetchall()
         conn.close()
         return res
     
     def visualizza_posizioni(self):
         conn = self.connetti_db()
-        res = conn.execute("SELECT * FROM POSIZIONI").fetchall()
+        res = conn.execute("SELECT ID_POSIZIONE, ZONA FROM POSIZIONI").fetchall()
         conn.close()
         return res
 
-    def aggiungi_posizione(self, id_p, zona):
+    def aggiungi_posizione(self, id_posizione, zona):
         conn = self.connetti_db()
-        conn.execute("INSERT OR REPLACE INTO POSIZIONI VALUES (?, ?)", (id_p, zona))
-        conn.commit(); conn.close()
+        conn.execute("INSERT OR IGNORE INTO POSIZIONI (ID_POSIZIONE, ZONA) VALUES (?, ?)", (id_posizione, zona))
+        conn.commit()
+        conn.close()
+
+    def aggiorna_posizione_scatola(self, id_scatola, zona, ubicazione):
+        conn = self.connetti_db()
+        conn.execute("UPDATE inventario SET zona = ?, ubicazione = ? WHERE id = ?", (zona, ubicazione, id_scatola))
+        conn.commit()
+        conn.close()
