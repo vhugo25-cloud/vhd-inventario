@@ -73,7 +73,7 @@ if scelta == "🏠 Home":
             df.to_excel(writer, index=False)
         st.download_button("📥 Scarica Excel Completo", output.getvalue(), "Inventario_VHD.xlsx")
 
-# --- 🔍 CERCA ED ELIMINA (Con Expander) ---
+# --- 🔍 CERCA ED ELIMINA (Versione Protetta) ---
 elif scelta == "🔍 Cerca ed Elimina":
     st.title("Cerca ed Elimina")
     chiave = st.text_input("Cerca per nome o contenuto...")
@@ -82,12 +82,19 @@ elif scelta == "🔍 Cerca ed Elimina":
         for r in ris:
             with st.expander(f"📦 {r[1]} | Posizione: {r[10]} - {r[11]} | Prop: {r[12]}"):
                 c1, c2 = st.columns([1, 2])
-                if r[3]: st.image(r[3], width=300)
+                
+                # --- PROTEZIONE FOTO ---
+                if r[3]: 
+                    try:
+                        c1.image(r[3], width=300)
+                    except:
+                        c1.info("📸 Anteprima non disponibile")
+                
                 c2.write(f"**Descrizione:** {r[2]}")
                 c2.write(f"**Contenuto:** Cima: {r[4]} | Centro: {r[6]} | Fondo: {r[8]}")
                 if st.button(f"🗑️ Elimina {r[1]}", key=f"del_{r[0]}"):
                     db.elimina_scatola(r[0]); st.success("Eliminata!"); st.rerun()
-
+                    
 # --- 📸 SCANNER QR ---
 elif scelta == "📸 Scanner QR":
     st.markdown("<h1 class='big-emoji'>📸</h1>", unsafe_allow_html=True)
