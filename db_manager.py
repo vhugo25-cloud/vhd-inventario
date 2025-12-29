@@ -11,10 +11,10 @@ class InventarioDB:
     def crea_tabelle(self):
         conn = self.connetti_db()
         cursor = conn.cursor()
-        # Tabella Posizioni (ID_POSIZIONE è lo scaffale, ZONA è l'area)
+        # Tabella Posizioni
         cursor.execute('''CREATE TABLE IF NOT EXISTS POSIZIONI 
                           (ID_POSIZIONE TEXT PRIMARY KEY, ZONA TEXT)''')
-        # Tabella Inventario completa di tutti i campi
+        # Tabella Inventario
         cursor.execute('''CREATE TABLE IF NOT EXISTS inventario 
                           (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                            nome_scatola TEXT NOT NULL, 
@@ -78,3 +78,21 @@ class InventarioDB:
         conn.execute("UPDATE inventario SET zona = ?, ubicazione = ? WHERE id = ?", (zona, ubicazione, id_scatola))
         conn.commit()
         conn.close()
+
+    def import_posizioni_da_df(self, df):
+        conn = self.connetti_db()
+        cursor = conn.cursor()
+        for _, row in df.iterrows():
+            id_p = str(row.get('ID Scaffale', row.get('Ubicazione', row.get('ID_POSIZIONE', ''))))
+            zona = str(row.get('Zona', row.get('ZONA', '')))
+            if id_p and zona:
+                cursor.execute("INSERT OR IGNORE INTO POSIZIONI (ID_POSIZIONE, ZONA) VALUES (?, ?)", (id_p, zona))
+        conn.commit()
+        conn.close()
+
+    def elimina_posizione(self, id_posizione):
+        conn = self.connetti_db()
+        conn.execute("DELETE FROM POSIZIONI WHERE ID_POSIZIONE = ?", (id_posizione,))
+        conn.commit()
+        conn.close()
+            

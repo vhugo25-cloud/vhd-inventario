@@ -18,12 +18,11 @@ try:
             api_secret = st.secrets["CLOUDINARY_API_SECRET"],
             secure = True
         )
-except:
-    pass
+except: pass
 
 st.set_page_config(page_title="Inventario Casa VHD", layout="wide")
 
-# --- ESTETICA (Regola d'Oro: Blu Notte e Moderno) ---
+# --- ESTETICA BLU NOTTE ---
 st.markdown("""
     <style>
     .main { background-color: #f0f2f6; }
@@ -40,7 +39,6 @@ utenti = ["Victor", "Evelyn", "Daniel", "Carly", "Rebby"]
 menu = ["🏠 Home", "🔍 Cerca ed Elimina", "📸 Scanner QR", "➕ Nuova Scatola", "🔄 Alloca/Sposta", "⚙️ Configura Magazzino", "🖨️ Stampa"]
 scelta = st.sidebar.selectbox("Menu Principale", menu)
 
-# --- FUNZIONE UPLOAD CON PROTEZIONE NOME ---
 def upload_foto(file, nome, tipo):
     if file:
         try:
@@ -62,115 +60,141 @@ if scelta == "🏠 Home":
     c1.metric("📦 Scatole", len(inv))
     c2.metric("📍 Zone", len(set([p[1] for p in pos])) if pos else 0)
     c3.metric("📌 Ubicazioni", len(pos))
-    c4.metric("⚠️ Da Allocare", len([s for s in inv if s[10] == "DA DEFINIRE"]))
+    c4.metric("⚠️ Da Allocare", len([s for s in inv if s[11] == "NON ALLOCATA"]))
     
     st.write("---")
     if inv:
-        df = pd.DataFrame(inv, columns=["ID", "Nome", "Desc", "Foto", "Cima", "FC", "Centro", "FCE", "Fondo", "FF", "Zona", "Ubi", "Prop"])
-        st.subheader("📊 Esporta Dati")
+        df = pd.DataFrame(inv, columns=["ID", "Nome", "Desc", "Foto", "Cima", "FC", "Centro", "FCE", "Fondo", "FF", "Zona", "Ubicazione", "Proprietario"])
+        st.subheader("📊 Riepilogo Ultime Scatole")
+        st.table(df[["Nome", "Zona", "Ubicazione", "Proprietario"]].tail(10))
+        
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            df.to_excel(writer, index=False, sheet_name='Inventario')
-        st.download_button("📥 Scarica Inventario in Excel", output.getvalue(), "Inventario_VHD.xlsx", "application/vnd.ms-excel")
-        st.table(df[["Nome", "Zona", "Ubi", "Prop"]].tail(5))
+            df.to_excel(writer, index=False)
+        st.download_button("📥 Scarica Excel Completo", output.getvalue(), "Inventario_VHD.xlsx")
 
-# --- 🔍 CERCA ED ELIMINA ---
+# --- 🔍 CERCA ED ELIMINA (Con Expander) ---
 elif scelta == "🔍 Cerca ed Elimina":
     st.title("Cerca ed Elimina")
-    chiave = st.text_input("Cerca...")
+    chiave = st.text_input("Cerca per nome o contenuto...")
     ris = db.cerca_scatola(chiave) if chiave else db.visualizza_inventario()
     if ris:
         for r in ris:
-            with st.expander(f"📦 {r[1]} | {r[10]} - {r[11]} ({r[12]})"):
+            with st.expander(f"📦 {r[1]} | Posizione: {r[10]} - {r[11]} | Prop: {r[12]}"):
                 c1, c2 = st.columns([1, 2])
-                if r[3]: 
-                    try: c1.image(r[3], width=250)
-                    except: c1.warning("Foto non trovata")
-                c2.write(f"**Proprietario:** {r[12]}")
+                if r[3]: st.image(r[3], width=300)
                 c2.write(f"**Descrizione:** {r[2]}")
-                st.write(f"**Strati:** Cima: {r[4]} | Centro: {r[6]} | Fondo: {r[8]}")
+                c2.write(f"**Contenuto:** Cima: {r[4]} | Centro: {r[6]} | Fondo: {r[8]}")
                 if st.button(f"🗑️ Elimina {r[1]}", key=f"del_{r[0]}"):
                     db.elimina_scatola(r[0]); st.success("Eliminata!"); st.rerun()
 
-# --- 📸 SCANNER QR (VERSIONE SMART CON AZIONE RAPIDA) ---
+# --- 📸 SCANNER QR ---
 elif scelta == "📸 Scanner QR":
     st.markdown("<h1 class='big-emoji'>📸</h1>", unsafe_allow_html=True)
     st.title("Scanner QR VHD")
     codice = qrcode_scanner(key='vhd_scanner')
-    
     if codice:
         res = db.cerca_scatola(codice)
         if res:
             r = res[0]
-            st.success(f"Scatola Trovata: {r[1]}")
-            st.write(f"Posizione Attuale: **{r[10]} - {r[11]}**")
+            st.success(f"Trovata: {r[1]}")
+            st.write(f"Posizione attuale: **{r[10]} - {r[11]}**")
             if r[3]: st.image(r[3], width=400)
-            
             st.write("---")
-            st.subheader("🔄 Azione Rapida: Alloca o Sposta")
-            pos = db.visualizza_posizioni()
-            if pos:
-                destinazioni = [f"{p[1]} - {p[0]}" for p in pos]
-                nuova_pos = st.selectbox("Seleziona Destinazione", destinazioni, key="quick_move")
+            st.subheader("🔄 Azione Rapida: Sposta")
+            pos_list = db.visualizza_posizioni()
+            if pos_list:
+                dest = [f"{p[1]} - {p[0]}" for p in pos_list]
+                nuova = st.selectbox("Nuova Destinazione", dest, key="q_m")
                 if st.button("CONFERMA SPOSTAMENTO"):
-                    ids = r[0]
-                    zn, un = nuova_pos.split(" - ")
-                    db.aggiorna_posizione_scatola(ids, zn, un)
-                    st.success(f"✅ {r[1]} spostata in {zn}!")
-                    st.balloons()
-            else:
-                st.warning("Crea prima le ubicazioni in 'Configura Magazzino'.")
-        else:
-            st.error("Codice non trovato nel database.")
-
+                    zn, un = nuova.split(" - ")
+                    db.aggiorna_posizione_scatola(r[0], zn, un)
+                    st.success("Spostata!"); st.balloons()
+ 
 # --- ➕ NUOVA SCATOLA ---
 elif scelta == "➕ Nuova Scatola":
     st.title("Registra Nuova Scatola")
     with st.form("n_s"):
-        nome = st.text_input("Nome Scatola"); desc = st.text_area("Descrizione Generale"); prop = st.selectbox("Proprietario", utenti)
-        f_m = st.file_uploader("📸 Foto Esterna", type=['jpg','png'])
+        nome = st.text_input("Nome Scatola")
+        desc = st.text_area("Descrizione Generale")
+        prop = st.selectbox("Proprietario", utenti)
+        f_m = st.file_uploader("📸 Foto Esterna Principale", type=['jpg','png'])
+        
         st.write("---")
+        st.subheader("📦 Dettaglio Strati Interni")
         c1, c2 = st.columns([2,1])
-        ct = c1.text_input("Contenuto Cima"); cf = c2.file_uploader("Foto Cima", key="c")
-        mt = c1.text_input("Contenuto Centro"); mf = c2.file_uploader("Foto Centro", key="m")
-        bt = c1.text_input("Contenuto Fondo"); bf = c2.file_uploader("Foto Fondo", key="b")
-        if st.form_submit_button("REGISTRA SCATOLA"):
+        ct = c1.text_input("Contenuto Cima (Sopra)")
+        cf = c2.file_uploader("Foto Cima", key="f_cima", type=['jpg','png'])
+        mt = c1.text_input("Contenuto Centro (Mezzo)")
+        mf = c2.file_uploader("Foto Centro", key="f_centro", type=['jpg','png'])
+        bt = c1.text_input("Contenuto Fondo (Sotto)")
+        bf = c2.file_uploader("Foto Fondo", key="f_fondo", type=['jpg','png'])
+        
+        if st.form_submit_button("REGISTRA SCATOLA COMPLETA"):
             if nome:
-                with st.spinner("Salvataggio sicuro..."):
+                with st.spinner("Caricamento in corso..."):
                     u1 = upload_foto(f_m, nome, "main")
                     u2 = upload_foto(cf, nome, "cima")
                     u3 = upload_foto(mf, nome, "centro")
                     u4 = upload_foto(bf, nome, "fondo")
                     db.aggiungi_scatola(nome, desc, u1, ct, u2, mt, u3, bt, u4, "DA DEFINIRE", "NON ALLOCATA", prop)
-                    st.success("✅ Scatola registrata!"); st.balloons()
+                    st.success(f"✅ {nome} registrata!"); st.balloons()
 
 # --- 🔄 ALLOCA/SPOSTA ---
 elif scelta == "🔄 Alloca/Sposta":
     st.title("Alloca o Sposta")
-    inv = db.visualizza_inventario(); pos = db.visualizza_posizioni()
+    inv = db.visualizza_inventario()
+    pos = db.visualizza_posizioni()
     if inv and pos:
         s_sel = st.selectbox("Seleziona Scatola", [f"{s[0]} | {s[1]}" for s in inv])
-        p_sel = st.selectbox("Seleziona Destinazione", [f"{p[1]} - {p[0]}" for p in pos])
-        if st.button("SPOSTA"):
-            ids = int(s_sel.split(" | ")[0]); zn, un = p_sel.split(" - ")
-            db.aggiorna_posizione_scatola(ids, zn, un); st.success("Spostata!"); st.balloons()
+        p_sel = st.selectbox("Destinazione", [f"{p[1]} - {p[0]}" for p in pos])
+        if st.button("CONFERMA SPOSTAMENTO"):
+            ids = int(s_sel.split(" | ")[0])
+            zn, un = p_sel.split(" - ")
+            db.aggiorna_posizione_scatola(ids, zn, un)
+            st.success("Spostata!"); st.balloons()
 
-# --- ⚙️ CONFIGURA ---
+# --- ⚙️ CONFIGURA (Con Importazione ed Elimina Ubicazione) ---
 elif scelta == "⚙️ Configura Magazzino":
     st.title("Configura Magazzino")
-    with st.form("p"):
-        s = st.text_input("ID Scaffale"); z = st.text_input("Zona")
-        if st.form_submit_button("SALVA"): db.aggiungi_posizione(s, z); st.rerun()
-    with st.expander("Reset"):
-        pwd = st.text_input("Password", type="password")
-        if st.button("CANCELLA DATABASE"):
+    t1, t2 = st.tabs(["➕ Singola", "📥 Importazione Massiva"])
+    with t1:
+        with st.form("p"):
+            s = st.text_input("ID Scaffale / Ubicazione")
+            z = st.text_input("Zona (es: Garage)")
+            if st.form_submit_button("SALVA"):
+                if s and z: db.aggiungi_posizione(s, z); st.success("Salvata!"); st.rerun()
+    with t2:
+        st.subheader("Carica 88 Ubicazioni da Excel")
+        file_ex = st.file_uploader("Seleziona file Excel", type=['xlsx'])
+        if file_ex:
+            df_im = pd.read_excel(file_ex)
+            if st.button("IMPORTA TUTTO DA EXCEL"):
+                db.import_posizioni_da_df(df_im)
+                st.success("Importazione completata!"); st.rerun()
+    
+    st.write("---")
+    st.subheader("🗑️ Elimina Singola Ubicazione")
+    with st.form("elimina_ubi"):
+        ubi_da_del = st.text_input("Spara con la pistola o scrivi l'ID da eliminare")
+        if st.form_submit_button("ELIMINA ORA"):
+            if ubi_da_del:
+                db.elimina_posizione(ubi_da_del)
+                st.success(f"Ubicazione {ubi_da_del} rimossa!"); st.rerun()
+
+    st.write("---")
+    with st.expander("🚨 RESET TOTALE"):
+        pwd = st.text_input("Password di sicurezza", type="password")
+        if st.button("AZZERA TUTTO IL DATABASE"):
             if pwd == "233674":
-                conn = db.connetti_db(); conn.execute("DELETE FROM inventario"); conn.execute("DELETE FROM POSIZIONI"); conn.commit(); st.rerun()
+                conn = db.connetti_db()
+                conn.execute("DELETE FROM inventario"); conn.execute("DELETE FROM POSIZIONI")
+                conn.commit(); st.error("Database svuotato!"); st.rerun()
 
 # --- 🖨️ STAMPA ---
 elif scelta == "🖨️ Stampa":
     st.markdown("<h1 class='big-emoji'>🖨️</h1>", unsafe_allow_html=True)
-    t1, t2 = st.tabs(["📦 Scatole (2xA4)", "📍 Ubicazioni (16xA4)"])
+    t1, t2 = st.tabs(["📦 Scatole", "📍 Ubicazioni"])
     with t1:
         inv = db.visualizza_inventario()
         sel_s = [s for s in inv if st.checkbox(f"Etichetta: {s[1]}", key=f"st_{s[0]}")]
@@ -183,14 +207,12 @@ elif scelta == "🖨️ Stampa":
                     pdf.rect(10, y, 190, 130)
                     pdf.set_font("Arial", 'B', 45); pdf.set_xy(15, y+15); pdf.cell(0, 20, f"{s[12]}".upper(), ln=True)
                     pdf.set_font("Arial", 'B', 28); pdf.set_xy(15, y+40); pdf.cell(0, 15, f"{s[1]}", ln=True)
-                    pdf.set_font("Arial", '', 14); pdf.set_xy(15, y+60); pdf.multi_cell(110, 8, f"Contenuto:\n{s[2]}")
-                    pdf.set_font("Arial", 'I', 9); pdf.set_xy(15, y+115); pdf.cell(0, 10, f"Generato: {datetime.now().strftime('%d/%m/%Y')}")
                     qr = QRCode(box_size=5); qr.add_data(s[1]); qr.make()
                     img = qr.make_image(); img.save("t.png"); pdf.image("t.png", x=125, y=y+35, w=65)
-            st.download_button("Scarica PDF", pdf.output(dest='S').encode('latin-1'), "etichette_vhd.pdf")
+            st.download_button("Scarica PDF", pdf.output(dest='S').encode('latin-1'), "etichette.pdf")
     with t2:
-        pos = db.visualizza_posizioni()
-        sel_p = [p for p in pos if st.checkbox(f"Ubi {p[1]}", key=f"up_{p[0]}")]
+        pos_st = db.visualizza_posizioni()
+        sel_p = [p for p in pos_st if st.checkbox(f"Ubi {p[1]} - {p[0]}", key=f"up_{p[0]}")]
         if st.button("Genera PDF Ubicazioni") and sel_p:
             pdf = FPDF()
             for i in range(0, len(sel_p), 16):
