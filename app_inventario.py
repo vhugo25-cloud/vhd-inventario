@@ -153,6 +153,7 @@ elif scelta == "➕ Nuova Scatola":
                 st.error("⚠️ Inserisci almeno il Nome della scatola!")
 
 # --- 🔄 ALLOCA/SPOSTA ---
+# --- 🔄 ALLOCA/SPOSTA ---
 elif scelta == "🔄 Alloca/Sposta":
     st.title("Alloca o Sposta")
     inv = db.visualizza_inventario()
@@ -167,6 +168,8 @@ elif scelta == "🔄 Alloca/Sposta":
             db.aggiorna_posizione_scatola(ids, zn, un)
             st.success(f"✅ Fatto! '{nome_s}' spostata in {zn} ({un}).")
             st.balloons()
+    else:
+        st.warning("⚠️ Devi avere almeno una scatola e una posizione create.")
 
 # --- ⚙️ CONFIGURA ---
 elif scelta == "⚙️ Configura Magazzino":
@@ -230,5 +233,39 @@ elif scelta == "⚙️ Configura Magazzino":
 
 # --- 🖨️ STAMPA ---
 elif scelta == "🖨️ Stampa":
-    st.title("Stampa Etichette")
-    # ... (Il codice di stampa rimane identico al tuo originale) ...                    
+    st.markdown("<h1 class='big-emoji'>🖨️</h1>", unsafe_allow_html=True)
+    t1, t2 = st.tabs(["📦 Scatole", "📍 Ubicazioni"])
+    with t1:
+        inv = db.visualizza_inventario()
+        sel_s = [s for s in inv if st.checkbox(f"Etichetta: {s[1]}", key=f"st_{s[0]}")]
+        if st.button("Scarica PDF Scatole") and sel_s:
+            pdf = FPDF()
+            for i in range(0, len(sel_s), 2):
+                pdf.add_page()
+                for idx, s in enumerate(sel_s[i:i+2]):
+                    y = 10 if idx == 0 else 150
+                    pdf.rect(10, y, 190, 130)
+                    pdf.set_font("Arial", 'B', 45); pdf.set_xy(15, y+15); pdf.cell(0, 20, f"{s[12]}".upper(), ln=True)
+                    pdf.set_font("Arial", 'B', 28); pdf.set_xy(15, y+40); pdf.cell(0, 15, f"{s[1]}", ln=True)
+                    qr = QRCode(box_size=5); qr.add_data(s[1]); qr.make()
+                    img = qr.make_image(); img.save("t.png"); pdf.image("t.png", x=125, y=y+35, w=65)
+            st.download_button("📥 Scarica PDF Pronto", pdf.output(dest='S').encode('latin-1'), "etichette.pdf")
+            st.success("✅ PDF Etichette generato!")
+
+    with t2:
+        pos_st = db.visualizza_posizioni()
+        sel_p = [p for p in pos_st if st.checkbox(f"Ubi {p[1]} - {p[0]}", key=f"up_{p[0]}")]
+        if st.button("Genera PDF Ubicazioni") and sel_p:
+            pdf = FPDF()
+            for i in range(0, len(sel_p), 16):
+                pdf.add_page()
+                for idx, p in enumerate(sel_p[i:i+16]):
+                    col, row = idx % 4, idx // 4
+                    x, y = 10 + (col*48), 10 + (row*70)
+                    pdf.rect(x, y, 45, 65)
+                    pdf.set_font("Arial", 'B', 8); pdf.text(x+2, y+8, f"{p[1]}")
+                    pdf.set_font("Arial", 'B', 12); pdf.text(x+2, y+18, f"ID: {p[0]}")
+                    qr = QRCode(box_size=3); qr.add_data(p[0]); qr.make()
+                    img = qr.make_image(); img.save("t_u.png"); pdf.image("t_u.png", x=x+5, y=y+22, w=35)
+            st.download_button("📥 Scarica PDF Ubicazioni", pdf.output(dest='S').encode('latin-1'), "ubicazioni_vhd.pdf")
+            st.success("✅ PDF Ubicazioni generato!")
