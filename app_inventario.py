@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from db_manager import InventarioDB
 from qrcode import QRCode
-import io, os
+import io, os, time
 from fpdf import FPDF
 from datetime import datetime
 import cloudinary
@@ -83,17 +83,17 @@ elif scelta == "🔍 Cerca ed Elimina":
             with st.expander(f"📦 {r[1]} | Posizione: {r[10]} - {r[11]} | Prop: {r[12]}"):
                 c1, c2 = st.columns([1, 2])
                 if r[3]: 
-                    try:
-                        c1.image(r[3], width=300)
-                    except:
-                        c1.info("📸 Anteprima non disponibile")
+                    try: c1.image(r[3], width=300)
+                    except: c1.info("📸 Anteprima non disponibile")
                 
                 c2.write(f"**Descrizione:** {r[2]}")
                 c2.write(f"**Contenuto:** Cima: {r[4]} | Centro: {r[6]} | Fondo: {r[8]}")
                 if st.button(f"🗑️ Elimina {r[1]}", key=f"del_{r[0]}"):
                     db.elimina_scatola(r[0])
-                    st.success(f"✅ Scatola '{r[1]}' eliminata con successo!")
+                    st.toast(f"Cestinata la scatola {r[1]}!", icon="🗑️")
+                    time.sleep(1)
                     st.rerun()
+
 # --- 📸 SCANNER QR ---
 elif scelta == "📸 Scanner QR":
     st.markdown("<h1 class='big-emoji'>📸</h1>", unsafe_allow_html=True)
@@ -103,10 +103,9 @@ elif scelta == "📸 Scanner QR":
         res = db.cerca_scatola(codice)
         if res:
             r = res[0]
+            st.toast(f"Codice {codice} rilevato!", icon="🎯")
             st.success(f"✅ Trovata: {r[1]}")
-            st.write(f"Posizione attuale: **{r[10]} - {r[11]}**")
             if r[3]: st.image(r[3], width=400)
-            st.write("---")
             st.subheader("🔄 Azione Rapida: Sposta")
             pos_list = db.visualizza_posizioni()
             if pos_list:
@@ -115,11 +114,13 @@ elif scelta == "📸 Scanner QR":
                 if st.button("CONFERMA SPOSTAMENTO"):
                     zn, un = nuova.split(" - ")
                     db.aggiorna_posizione_scatola(r[0], zn, un)
-                    st.success(f"✅ Spostamento di '{r[1]}' completato!")
+                    st.toast("Spostamento completato!", icon="🚚")
                     st.balloons()
+                    time.sleep(1)
+                    st.rerun()
         else:
             st.warning(f"⚠️ Nessuna scatola trovata con codice: {codice}")
- 
+
 # --- ➕ NUOVA SCATOLA ---
 elif scelta == "➕ Nuova Scatola":
     st.title("Registra Nuova Scatola")
@@ -128,7 +129,6 @@ elif scelta == "➕ Nuova Scatola":
         desc = st.text_area("Descrizione Generale")
         prop = st.selectbox("Proprietario", utenti)
         f_m = st.file_uploader("📸 Foto Esterna Principale", type=['jpg','png'])
-        
         st.write("---")
         st.subheader("📦 Dettaglio Strati Interni")
         c1, c2 = st.columns([2,1])
@@ -141,18 +141,16 @@ elif scelta == "➕ Nuova Scatola":
         
         if st.form_submit_button("REGISTRA SCATOLA COMPLETA"):
             if nome:
-                with st.spinner("📦 Salvataggio e caricamento foto su Cloudinary..."):
+                with st.spinner("📦 Salvataggio e caricamento foto..."):
                     u1 = upload_foto(f_m, nome, "main")
                     u2 = upload_foto(cf, nome, "cima")
                     u3 = upload_foto(mf, nome, "centro")
                     u4 = upload_foto(bf, nome, "fondo")
                     db.aggiungi_scatola(nome, desc, u1, ct, u2, mt, u3, bt, u4, "DA DEFINIRE", "NON ALLOCATA", prop)
-                    st.success(f"✅ Ottimo! La scatola '{nome}' è stata salvata correttamente.")
                     st.balloons()
+                    st.success(f"✅ Ottimo! La scatola '{nome}' è salva.")
             else:
-                st.error("⚠️ Inserisci almeno il Nome della scatola!")
-
-# --- 🔄 ALLOCA/SPOSTA ---
+                st.error("⚠️ Inserisci almeno il Nome!")
 # --- 🔄 ALLOCA/SPOSTA ---
 elif scelta == "🔄 Alloca/Sposta":
     st.title("Alloca o Sposta")
@@ -166,8 +164,10 @@ elif scelta == "🔄 Alloca/Sposta":
             nome_s = s_sel.split(" | ")[1]
             zn, un = p_sel.split(" - ")
             db.aggiorna_posizione_scatola(ids, zn, un)
-            st.success(f"✅ Fatto! '{nome_s}' spostata in {zn} ({un}).")
-            st.balloons()
+            st.toast(f"{nome_s} spostata!", icon="📍")
+            st.success(f"✅ Spostata in {zn}")
+            time.sleep(1)
+            st.rerun()
     else:
         st.warning("⚠️ Devi avere almeno una scatola e una posizione create.")
 
@@ -175,10 +175,9 @@ elif scelta == "🔄 Alloca/Sposta":
 elif scelta == "⚙️ Configura Magazzino":
     st.title("Configura Magazzino")
     t1, t2 = st.tabs(["➕ Singola", "📥 Importazione Massiva"])
-    
     with t1:
         with st.form("p"):
-            s = st.text_input("ID Scaffale / Ubicazione (es: GAR.1.1)")
+            s = st.text_input("ID Scaffale (es: GAR.1.1)")
             z = st.text_input("Zona (es: Garage)")
             if st.form_submit_button("SALVA UBICAZIONE"):
                 if s and z:
@@ -187,40 +186,23 @@ elif scelta == "⚙️ Configura Magazzino":
                         st.error(f"❌ Errore: L'ubicazione {s} esiste già!")
                     else:
                         db.aggiungi_posizione(s, z)
-                        st.success(f"✅ Ubicazione {s} salvata correttamente!")
+                        st.toast("Ubicazione aggiunta!", icon="✅")
+                        time.sleep(1)
                         st.rerun()
-                else:
-                    st.warning("⚠️ Compila entrambi i campi.")
-
     with t2:
-        st.subheader("Importazione Massiva")
-        file_ex = st.file_uploader("Seleziona file Excel", type=['xlsx'])
-        if file_ex:
-            df_im = pd.read_excel(file_ex)
-            if st.button("IMPORTA TUTTO DA EXCEL"):
-                with st.spinner("📥 Caricamento in corso..."):
-                    db.import_posizioni_da_df(df_im)
-                    st.success(f"✅ Successo! Caricate {len(df_im)} nuove ubicazioni.")
-                    st.rerun()
+        file_ex = st.file_uploader("Excel Ubicazioni", type=['xlsx'])
+        if file_ex and st.button("IMPORTA TUTTO"):
+            db.import_posizioni_da_df(pd.read_excel(file_ex))
+            st.balloons()
+            st.rerun()
 
     st.markdown("---")
     st.subheader("💾 Backup Sicurezza")
     try:
         with open("magazzino_casa.db", "rb") as f:
             st.download_button("📥 Scarica Database Backup (.db)", f, "magazzino_casa.db")
-    except: st.warning("⚠️ Database non trovato.")           
-    
-    st.write("---")
-    st.subheader("🗑️ Elimina Singola Ubicazione")
-    with st.form("elimina_ubi"):
-        ubi_da_del = st.text_input("ID da eliminare")
-        if st.form_submit_button("ELIMINA ORA"):
-            if ubi_da_del:
-                db.elimina_posizione(ubi_da_del)
-                st.success(f"✅ Ubicazione {ubi_da_del} rimossa.")
-                st.rerun()
+    except: st.write("Database non pronto.")
 
-    st.write("---")
     with st.expander("🚨 RESET TOTALE"):
         pwd = st.text_input("Password", type="password")
         if st.button("AZZERA TUTTO"):
@@ -228,7 +210,8 @@ elif scelta == "⚙️ Configura Magazzino":
                 conn = db.connetti_db()
                 conn.execute("DELETE FROM inventario"); conn.execute("DELETE FROM POSIZIONI")
                 conn.commit()
-                st.error("💥 Database azzerato!")
+                st.snow()
+                time.sleep(2)
                 st.rerun()
 
 # --- 🖨️ STAMPA ---
@@ -268,4 +251,4 @@ elif scelta == "🖨️ Stampa":
                     qr = QRCode(box_size=3); qr.add_data(p[0]); qr.make()
                     img = qr.make_image(); img.save("t_u.png"); pdf.image("t_u.png", x=x+5, y=y+22, w=35)
             st.download_button("📥 Scarica PDF Ubicazioni", pdf.output(dest='S').encode('latin-1'), "ubicazioni_vhd.pdf")
-            st.success("✅ PDF Ubicazioni generato!")
+            st.success("✅ PDF Ubicazioni generato!")                
