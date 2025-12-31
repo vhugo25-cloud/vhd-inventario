@@ -1,9 +1,11 @@
 import sqlite3
+from datetime import datetime
 
 class InventarioDB:
     def __init__(self, db_name="magazzino_casa.db"):
         self.db_name = db_name
         self.crea_tabelle()
+        self._aggiorna_struttura_se_necessario()
 
     def connetti_db(self):
         return sqlite3.connect(self.db_name, check_same_thread=False)
@@ -14,7 +16,7 @@ class InventarioDB:
         # Tabella Posizioni
         cursor.execute('''CREATE TABLE IF NOT EXISTS POSIZIONI 
                           (ID_POSIZIONE TEXT PRIMARY KEY, ZONA TEXT)''')
-        # Tabella Inventario
+        # Tabella Inventario con colonna data_creazione
         cursor.execute('''CREATE TABLE IF NOT EXISTS inventario 
                           (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                            nome_scatola TEXT NOT NULL, 
@@ -25,16 +27,32 @@ class InventarioDB:
                            strato_fondo TEXT, foto_fondo TEXT,
                            zona TEXT, 
                            ubicazione TEXT,
-                           proprietario TEXT)''')
+                           proprietario TEXT,
+                           data_creazione TEXT)''')
         conn.commit()
+        conn.close()
+
+    def _aggiorna_struttura_se_necessario(self):
+        """Aggiunge colonne mancanti ai database esistenti per la Regola d'Oro"""
+        conn = self.connetti_db()
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(inventario)")
+        colonne = [info[1] for info in cursor.fetchall()]
+        
+        if 'data_creazione' not in colonne:
+            cursor.execute("ALTER TABLE inventario ADD COLUMN data_creazione TEXT")
+            conn.commit()
         conn.close()
 
     def aggiungi_scatola(self, nome, desc, f_main, cima, f_cima, centro, f_centro, fondo, f_fondo, zona, ubicazione, proprietario):
         conn = self.connetti_db()
+        # Data automatica per il Punto 1
+        data_oggi = datetime.now().strftime("%d/%m/%Y %H:%M")
+        
         query = """INSERT INTO inventario 
-                   (nome_scatola, desc_generale, foto_principale, strato_cima, foto_cima, strato_centro, foto_centro, strato_fondo, foto_fondo, zona, ubicazione, proprietario) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
-        conn.execute(query, (nome, desc, f_main, cima, f_cima, centro, f_centro, fondo, f_fondo, zona, ubicazione, proprietario))
+                   (nome_scatola, desc_generale, foto_principale, strato_cima, foto_cima, strato_centro, foto_centro, strato_fondo, foto_fondo, zona, ubicazione, proprietario, data_creazione) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+        conn.execute(query, (nome, desc, f_main, cima, f_cima, centro, f_centro, fondo, f_fondo, zona, ubicazione, proprietario, data_oggi))
         conn.commit()
         conn.close()
 
@@ -95,4 +113,3 @@ class InventarioDB:
         conn.execute("DELETE FROM POSIZIONI WHERE ID_POSIZIONE = ?", (id_posizione,))
         conn.commit()
         conn.close()
-            
