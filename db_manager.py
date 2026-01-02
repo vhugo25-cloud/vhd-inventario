@@ -1,115 +1,142 @@
 import sqlite3
 from datetime import datetime
+import pandas as pd
 
 class InventarioDB:
-    def __init__(self, db_name="magazzino_casa.db"):
+    def __init__(self, db_name="vhd_warehouse.db"):
         self.db_name = db_name
         self.crea_tabelle()
-        self._aggiorna_struttura_se_necessario()
 
     def connetti_db(self):
-        return sqlite3.connect(self.db_name, check_same_thread=False)
+        return sqlite3.connect(self.db_name)
 
     def crea_tabelle(self):
         conn = self.connetti_db()
         cursor = conn.cursor()
-        # Tabella Posizioni
-        cursor.execute('''CREATE TABLE IF NOT EXISTS POSIZIONI 
-                          (ID_POSIZIONE TEXT PRIMARY KEY, ZONA TEXT)''')
-        # Tabella Inventario con colonna data_creazione
-        cursor.execute('''CREATE TABLE IF NOT EXISTS inventario 
-                          (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                           nome_scatola TEXT NOT NULL, 
-                           desc_generale TEXT,
-                           foto_principale TEXT,
-                           strato_cima TEXT, foto_cima TEXT,
-                           strato_centro TEXT, foto_centro TEXT,
-                           strato_fondo TEXT, foto_fondo TEXT,
-                           zona TEXT, 
-                           ubicazione TEXT,
-                           proprietario TEXT,
-                           data_creazione TEXT)''')
+        # Tabella Inventario: 14 colonne totali (ID + 13 campi dati)
+        cursor.execute('''CREATE TABLE IF NOT EXISTS inventario (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT, 
+            descrizione TEXT, 
+            foto_main TEXT,
+            cima_testo TEXT, 
+            cima_foto TEXT,
+            centro_testo TEXT, 
+            centro_foto TEXT,
+            fondo_testo TEXT, 
+            fondo_foto TEXT,
+            zona TEXT, 
+            ubicazione TEXT, 
+            proprietario TEXT, 
+            data TEXT
+        )''')
+        
+        # Tabella Posizioni: Struttura del magazzino
+        cursor.execute('''CREATE TABLE IF NOT EXISTS posizioni (
+            id_ubicazione TEXT PRIMARY KEY,
+            zona TEXT
+        )''')
         conn.commit()
         conn.close()
 
-    def _aggiorna_struttura_se_necessario(self):
-        """Aggiunge colonne mancanti ai database esistenti per la Regola d'Oro"""
+    def aggiungi_scatola(self, nome, desc, f_m, ct, cf, mt, mf, bt, bf, zona, ubi, prop):
         conn = self.connetti_db()
         cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(inventario)")
-        colonne = [info[1] for info in cursor.fetchall()]
-        
-        if 'data_creazione' not in colonne:
-            cursor.execute("ALTER TABLE inventario ADD COLUMN data_creazione TEXT")
-            conn.commit()
-        conn.close()
-
-    def aggiungi_scatola(self, nome, desc, f_main, cima, f_cima, centro, f_centro, fondo, f_fondo, zona, ubicazione, proprietario):
-        conn = self.connetti_db()
-        # Data automatica per il Punto 1
-        data_oggi = datetime.now().strftime("%d/%m/%Y %H:%M")
-        
-        query = """INSERT INTO inventario 
-                   (nome_scatola, desc_generale, foto_principale, strato_cima, foto_cima, strato_centro, foto_centro, strato_fondo, foto_fondo, zona, ubicazione, proprietario, data_creazione) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
-        conn.execute(query, (nome, desc, f_main, cima, f_cima, centro, f_centro, fondo, f_fondo, zona, ubicazione, proprietario, data_oggi))
-        conn.commit()
-        conn.close()
-
-    def elimina_scatola(self, id_scatola):
-        conn = self.connetti_db()
-        conn.execute("DELETE FROM inventario WHERE id = ?", (id_scatola,))
+        data_ora = datetime.now().strftime("%d/%m/%Y %H:%M")
+        cursor.execute('''INSERT INTO inventario 
+            (nome, descrizione, foto_main, cima_testo, cima_foto, 
+             centro_testo, centro_foto, fondo_testo, fondo_foto, 
+             zona, ubicazione, proprietario, data)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (nome, desc, f_m, ct, cf, mt, mf, bt, bf, zona, ubi, prop, data_ora))
         conn.commit()
         conn.close()
 
     def visualizza_inventario(self):
         conn = self.connetti_db()
-        res = conn.execute("SELECT * FROM inventario").fetchall()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM inventario ORDER BY id DESC")
+        rows = cursor.fetchall()
         conn.close()
-        return res
+        return rows
 
     def cerca_scatola(self, termine):
         conn = self.connetti_db()
-        c = f"%{termine}%"
-        res = conn.execute("""SELECT * FROM inventario WHERE 
-                              nome_scatola LIKE ? OR desc_generale LIKE ? OR 
-                              zona LIKE ? OR ubicazione LIKE ? OR 
-                              strato_cima LIKE ? OR strato_centro LIKE ? OR strato_fondo LIKE ?""", 
-                           (c, c, c, c, c, c, c)).fetchall()
+        cursor = conn.cursor()
+        t = f"%{termine}%"
+        cursor.execute('''SELECT * FROM inventario WHERE 
+                          nome LIKE ? OR descrizione LIKE ? OR 
+                          cima_testo LIKE ? OR centro_testo LIKE ? OR 
+                          fondo_testo LIKE ? OR proprietario LIKE ? OR 
+                          zona LIKE ?''', (t, t, t, t, t, t, t))
+        rows = cursor.fetchall()
         conn.close()
-        return res
-    
-    def visualizza_posizioni(self):
-        conn = self.connetti_db()
-        res = conn.execute("SELECT ID_POSIZIONE, ZONA FROM POSIZIONI").fetchall()
-        conn.close()
-        return res
+        return rows
 
-    def aggiungi_posizione(self, id_posizione, zona):
+    def elimina_scatola(self, id_scatola):
         conn = self.connetti_db()
-        conn.execute("INSERT OR IGNORE INTO POSIZIONI (ID_POSIZIONE, ZONA) VALUES (?, ?)", (id_posizione, zona))
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM inventario WHERE id = ?", (id_scatola,))
         conn.commit()
         conn.close()
 
-    def aggiorna_posizione_scatola(self, id_scatola, zona, ubicazione):
+    # --- GESTIONE POSIZIONI (MAGAZZINO) ---
+    def aggiungi_posizione(self, id_u, zona):
         conn = self.connetti_db()
-        conn.execute("UPDATE inventario SET zona = ?, ubicazione = ? WHERE id = ?", (zona, ubicazione, id_scatola))
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO posizioni (id_ubicazione, zona) VALUES (?, ?)", (id_u, zona))
+        conn.commit()
+        conn.close()
+
+    def visualizza_posizioni(self):
+        conn = self.connetti_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM posizioni ORDER BY zona, id_ubicazione")
+        rows = cursor.fetchall()
+        conn.close()
+        return rows
+
+    def elimina_posizione(self, id_u):
+        conn = self.connetti_db()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM posizioni WHERE id_ubicazione = ?", (id_u,))
+        conn.commit()
+        conn.close()
+
+    def aggiorna_posizione_scatola(self, id_s, zona, ubi):
+        conn = self.connetti_db()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE inventario SET zona = ?, ubicazione = ? WHERE id = ?", (zona, ubi, id_s))
         conn.commit()
         conn.close()
 
     def import_posizioni_da_df(self, df):
+        """Versione Universale: Legge la prima colonna come ID e la seconda come ZONA"""
         conn = self.connetti_db()
         cursor = conn.cursor()
-        for _, row in df.iterrows():
-            id_p = str(row.get('ID Scaffale', row.get('Ubicazione', row.get('ID_POSIZIONE', ''))))
-            zona = str(row.get('Zona', row.get('ZONA', '')))
-            if id_p and zona:
-                cursor.execute("INSERT OR IGNORE INTO POSIZIONI (ID_POSIZIONE, ZONA) VALUES (?, ?)", (id_p, zona))
-        conn.commit()
-        conn.close()
+        
+        successi = 0
+        try:
+            for i, row in df.iterrows():
+                # Legge per posizione delle colonne (0 e 1) invece che per nome
+                val_id = str(row.iloc[0]).strip()
+                val_zona = str(row.iloc[1]).strip()
+                
+                # Salta le righe di intestazione se presenti
+                if val_id.upper() in ["ID", "UBICAZIONE", "SCAFFALE"] or val_zona.upper() == "ZONA":
+                    continue
 
-    def elimina_posizione(self, id_posizione):
-        conn = self.connetti_db()
-        conn.execute("DELETE FROM POSIZIONI WHERE ID_POSIZIONE = ?", (id_posizione,))
-        conn.commit()
-        conn.close()
+                # Inserisce solo se i dati sono validi
+                if val_id and val_id.lower() != 'nan' and val_zona and val_zona.lower() != 'nan':
+                    cursor.execute("INSERT OR REPLACE INTO posizioni (id_ubicazione, zona) VALUES (?, ?)", 
+                                   (val_id, val_zona))
+                    successi += 1
+            
+            conn.commit()
+            conn.close()
+            return True, successi
+        except Exception as e:
+            print(f"Errore Import: {e}")
+            conn.close()
+            return False, 0
+        
