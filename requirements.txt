@@ -6,3 +6,4 @@ pillow
 xlsxwriter
 openpyxl
 qrcode
+streamlit-qrcode-scanner
