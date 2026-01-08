@@ -44,24 +44,35 @@ except:
 st.set_page_config(page_title="Inventario Casa VHD", layout="wide")
 
 # --- ESTETICA PROFESSIONALE (FIX DARK MODE & VISIBILITÀ) ---
+# --- ESTETICA PROFESSIONALE (ADATTIVA PER DARK & LIGHT MODE) ---
 st.markdown("""
     <style>
-    .main { background-color: #f0f2f6; }
+    /* Sfondo Sidebar professionale (rimane scuro con testo bianco) */
     [data-testid="stSidebar"] { background-color: #001f3f; }
     [data-testid="stSidebar"] * { color: white !important; font-size: 1.1rem; }
     
-    /* FIX VISIBILITÀ: Forziamo il colore scuro per i testi su sfondo chiaro */
-    h1, h2, h3, p, span, label, .stMarkdown { 
-        color: #001f3f !important; 
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    /* FIX VISIBILITÀ: Non forziamo un colore fisso per i titoli, 
+       lasciamo che Streamlit lo gestisca, o usiamo un colore neutro */
+    h1, h2, h3 { 
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        /* Rimuoviamo il color: #001f3f !important qui */
+    }
+
+    /* Le metriche ora hanno un bordo blu ma uno sfondo che si adatta */
+    div[data-testid="stMetric"] {
+        background-color: rgba(128, 128, 128, 0.1); 
+        padding: 15px; 
+        border-radius: 10px; 
+        border-left: 5px solid #007bff;
     }
     
-    .stMetric { 
-        background-color: #ffffff; padding: 15px; border-radius: 10px; 
-        border-left: 5px solid #007bff; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); 
+    /* Gli Expander (i menu a tendina) ora sono leggibili ovunque */
+    .stExpander { 
+        border: 1px solid #007bff; 
+        border-radius: 10px; 
     }
-    .stExpander { background-color: white !important; border: 1px solid #007bff; border-radius: 10px; }
-    .data-piccola { font-size: 0.85rem; color: #555 !important; font-style: italic; }
+    
+    .data-piccola { font-size: 0.85rem; color: #888; font-style: italic; }
     </style>
     """, unsafe_allow_html=True)
 
