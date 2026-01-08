@@ -1,0 +1,12 @@
+streamlit
+pandas
+fpdf2
+cloudinary
+pillow
+xlsxwriter
+openpyxl
+qrcode
+streamlit-qrcode-scanner
+postgrest
+storage3
+gotrue
