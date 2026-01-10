@@ -5,11 +5,9 @@ from qrcode import QRCode
 import io
 import os
 import time
-from fpdf import FPDF
 from datetime import datetime
-import cloudinary
-import cloudinary.uploader
 from streamlit_qrcode_scanner import qrcode_scanner
+# Nota: fpdf e cloudinary rimossi perché non necessari
 
 # --- CONFIGURAZIONE PERCORSI ASSETS ---
 ASSETS_DIR = "assets"
