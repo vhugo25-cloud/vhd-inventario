@@ -7,7 +7,14 @@ import os
 import time
 from datetime import datetime
 from streamlit_qrcode_scanner import qrcode_scanner
-# Nota: fpdf e cloudinary rimossi perché non necessari
+
+# --- NUOVE LIBRERIE PER LA STAMPA (REPORTLAB) ---
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+
+# --- CONFIGURAZIONE PAGINA ---
+st.set_page_config(page_title="Inventario Casa VHD", layout="wide")
 
 # --- CONFIGURAZIONE PERCORSI ASSETS ---
 ASSETS_DIR = "assets"
@@ -27,17 +34,7 @@ PATH_SCANNER = check_img("scanner.png")
 PATH_CONFIG  = check_img("config.png")
 NO_PHOTO     = check_img("no_image.png")
 
-# --- CONFIGURAZIONE CLOUDINARY ---
-try:
-    if "CLOUDINARY_CLOUD_NAME" in st.secrets:
-        cloudinary.config(
-            cloud_name = st.secrets["CLOUDINARY_CLOUD_NAME"],
-            api_key = st.secrets["CLOUDINARY_API_KEY"],
-            api_secret = st.secrets["CLOUDINARY_API_SECRET"],
-            secure = True
-        )
-except:
-    pass
+
 
 st.set_page_config(page_title="Inventario Casa VHD", layout="wide")
 
@@ -81,18 +78,10 @@ menu = ["🏠 Home", "🔍 Cerca ed Elimina", "📸 Scanner QR", "➕ Nuova Scat
 scelta = st.sidebar.selectbox("Menu Principale", menu)
 
 # Tasto Sveglia per Supabase (Sidebar)
-
-
 def upload_foto(file, nome, tipo):
+    # Temporaneamente disattivato Cloudinary per usare Supabase
     if file:
-        try:
-            prefisso = (nome[:3].upper()) if len(nome) >= 3 else "BOX"
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            nome_unico = f"{prefisso}_{tipo}_{timestamp}"
-            ris = cloudinary.uploader.upload(file, folder="VHD_Inventario", public_id=nome_unico)
-            return ris['secure_url']
-        except:
-            return ""
+        st.warning("⚠️ Il caricamento foto è in fase di aggiornamento per Supabase.")
     return ""
 
 # --- 🏠 HOME ---
@@ -352,7 +341,7 @@ elif scelta == "⚙️ Configura Magazzino":
                     st.warning("Funzione reset attivata."); time.sleep(2); st.rerun()
 
 # --- 🖨️ STAMPA ---
-# --- 🖨️ STAMPA (VERSIONE DEFINITIVA E CALIBRATA) ---
+# --- 🖨️ STAMPA (VERSIONE DEFINITIVA CON REPORTLAB) ---
 elif scelta == "🖨️ Stampa":
     st.image(PATH_STAMPA, width=150)
     st.title("Centro Stampa Etichette Professionale")
@@ -372,7 +361,6 @@ elif scelta == "🖨️ Stampa":
         tab_s, tab_u = st.tabs(["📦 Etichette Scatole", "📍 Etichette Ubicazioni"])
         
         with tab_s:
-            # Filtro intelligente locale (Nome, Proprietario, Descrizione)
             f = filtro_veloce.lower()
             inv_da_mostrare = [
                 s for s in inv_totale 
@@ -383,7 +371,6 @@ elif scelta == "🖨️ Stampa":
             if inv_da_mostrare:
                 st.write(f"✅ Trovate {len(inv_da_mostrare)} scatole")
                 for s in inv_da_mostrare:
-                    # s[1]=Nome, s[17]=Ubicazione, s[18]=Proprietario
                     nome_s = s[1]
                     prop_s = s[18] if s[18] else "N/A"
                     ubi_s = s[17] if s[17] else "DA ALLOCARE"
@@ -392,19 +379,20 @@ elif scelta == "🖨️ Stampa":
                         sel_s.append(s)
                 
                 if sel_s and st.button("📥 GENERA PDF PER SELEZIONATI", use_container_width=True):
-                    pdf = FPDF()
+                    buffer = io.BytesIO()
+                    c = canvas.Canvas(buffer, pagesize=A4)
+                    
                     # Elaboriamo 2 scatole alla volta per pagina
                     for i in range(0, len(sel_s), 2):
-                        pdf.add_page()
                         for idx, s in enumerate(sel_s[i:i+2]):
-                            # Calcolo coordinata Y di partenza (10 per la prima, 150 per la seconda)
-                            y_start = 10 if idx == 0 else 150
+                            # Calcolo coordinata Y di partenza (A4 è alto 297mm)
+                            # Prima etichetta in alto (y=150mm), seconda in basso (y=10mm)
+                            y_start = 150*mm if idx == 0 else 10*mm
                             
                             nome_etichetta = str(s[1])
                             prop_etichetta = str(s[18]).upper()
                             data_raw = str(s[19])
                             
-                            # Formattazione Data DD/MM/YYYY
                             try:
                                 dp = data_raw[:10].split("-")
                                 data_f = f"{dp[2]}/{dp[1]}/{dp[0]}"
@@ -413,37 +401,43 @@ elif scelta == "🖨️ Stampa":
 
                             # --- DISEGNO GRAFICO ---
                             # Cornice etichetta
-                            pdf.rect(10, y_start, 190, 130)
+                            c.setLineWidth(1)
+                            c.rect(10*mm, y_start, 190*mm, 130*mm)
                             
                             # Proprietario (Grande)
-                            pdf.set_font("Arial", 'B', 45)
-                            pdf.set_xy(15, y_start + 15)
-                            pdf.cell(110, 20, prop_etichetta, ln=0)
+                            c.setFont("Helvetica-Bold", 45)
+                            c.drawString(15*mm, y_start + 100*mm, prop_etichetta)
                             
-                            # Nome Scatola (Sotto proprietario)
-                            pdf.set_font("Arial", 'B', 25)
-                            pdf.set_xy(15, y_start + 45)
-                            pdf.multi_cell(110, 12, nome_etichetta)
+                            # Nome Scatola
+                            c.setFont("Helvetica-Bold", 25)
+                            c.drawString(15*mm, y_start + 80*mm, nome_etichetta[:25]) # troncato per sicurezza
                             
                             # Data (In basso a sinistra)
-                            pdf.set_font("Arial", 'I', 12)
-                            pdf.set_xy(15, y_start + 115)
-                            pdf.cell(0, 10, f"Registrata il: {data_f}")
+                            c.setFont("Helvetica-Oblique", 12)
+                            c.drawString(15*mm, y_start + 10*mm, f"Registrata il: {data_f}")
                             
                             # --- GENERAZIONE QR CODE ---
-                            qr = QRCode(box_size=5)
+                            qr = QRCode(box_size=10)
                             qr.add_data(nome_etichetta)
                             qr.make()
-                            img = qr.make_image()
-                            temp_img = f"qr_temp_{idx}.png"
-                            img.save(temp_img)
+                            img_qr = qr.make_image(fill_color="black", back_color="white")
                             
-                            # Inserimento QR Code con coordinata Y calibrata
-                            pdf.image(temp_img, x=125, y=y_start + 30, w=65)
+                            # Salvataggio temporaneo in buffer per ReportLab
+                            tmp_buffer = io.BytesIO()
+                            img_qr.save(tmp_buffer, format='PNG')
+                            tmp_buffer.seek(0)
+                            
+                            # Inserimento QR Code
+                            c.drawInlineImage(img_qr, 120*mm, y_start + 30*mm, width=65*mm, height=65*mm)
 
-                    st.download_button("💾 Scarica PDF", pdf.output(dest='S').encode('latin-1'), "etichette_vhd.pdf")
+                        c.showPage() # Chiude la pagina dopo 2 etichette
+                    
+                    c.save()
+                    pdf_out = buffer.getvalue()
+                    st.download_button("💾 Scarica PDF", pdf_out, "etichette_vhd.pdf", "application/pdf")
             else:
                 st.warning("Nessuna scatola trovata.")
 
         with tab_u:
             pos_complete = db.visualizza_posizioni()
+            
