@@ -20,6 +20,32 @@ from reportlab.lib.units import mm
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="Inventario Casa VHD", layout="wide")
 
+# --- FUNZIONE CARICAMENTO FOTO ---
+def upload_foto(file, nome, tipo):
+    if file:
+        try:
+            # Configurazione Cloudinary con le tue chiavi
+            cloudinary.config(
+                cloud_name = st.secrets["CLOUDINARY_CLOUD_NAME"],
+                api_key = st.secrets["CLOUDINARY_API_KEY"],
+                api_secret = st.secrets["CLOUDINARY_API_SECRET"],
+                secure = True
+            )
+            
+            # Creazione nome file unico
+            prefisso = (nome[:3].upper()) if len(nome) >= 3 else "BOX"
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            nome_unico = f"{prefisso}_{tipo}_{timestamp}"
+            
+            # Caricamento effettivo
+            ris = cloudinary.uploader.upload(file, folder="VHD_Inventario", public_id=nome_unico)
+            return ris['secure_url']
+        except Exception as e:
+            st.error(f"Errore Cloudinary: {e}")
+            return ""
+    return ""
+
+
 # --- FUNZIONE CARICAMENTO FOTO (Da inserire qui) ---
 def upload_foto(file, nome, tipo):
     if file:
