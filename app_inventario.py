@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import streamlit as st
 import pandas as pd
 import db_manager
@@ -9,7 +8,7 @@ import time
 from datetime import datetime
 from streamlit_qrcode_scanner import qrcode_scanner
 
-# --- LIBRERIE PER CLOUDINARY (Aggiunte qui) ---
+# --- LIBRERIE PER CLOUDINARY ---
 import cloudinary
 import cloudinary.uploader
 
@@ -21,7 +20,7 @@ from reportlab.lib.units import mm
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="Inventario Casa VHD", layout="wide")
 
-# --- FUNZIONE CARICAMENTO FOTO ---
+# --- FUNZIONE CARICAMENTO FOTO (UNICA) ---
 def upload_foto(file, nome, tipo):
     if file:
         try:
@@ -39,28 +38,6 @@ def upload_foto(file, nome, tipo):
             nome_unico = f"{prefisso}_{tipo}_{timestamp}"
             
             # Caricamento effettivo
-            ris = cloudinary.uploader.upload(file, folder="VHD_Inventario", public_id=nome_unico)
-            return ris['secure_url']
-        except Exception as e:
-            st.error(f"Errore Cloudinary: {e}")
-            return ""
-    return ""
-
-
-# --- FUNZIONE CARICAMENTO FOTO (Da inserire qui) ---
-def upload_foto(file, nome, tipo):
-    if file:
-        try:
-            cloudinary.config(
-                cloud_name = st.secrets["CLOUDINARY_CLOUD_NAME"],
-                api_key = st.secrets["CLOUDINARY_API_KEY"],
-                api_secret = st.secrets["CLOUDINARY_API_SECRET"],
-                secure = True
-            )
-            prefisso = (nome[:3].upper()) if len(nome) >= 3 else "BOX"
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            nome_unico = f"{prefisso}_{tipo}_{timestamp}"
-            
             ris = cloudinary.uploader.upload(file, folder="VHD_Inventario", public_id=nome_unico)
             return ris['secure_url']
         except Exception as e:
@@ -124,17 +101,13 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # Inizializzazione Database Cloud (Dalla tua Classe InventarioDB)
+# Inizializzazione Database Cloud (Dalla tua Classe InventarioDB)
 db = db_manager.InventarioDB()
 utenti = ["Victor", "Evelyn", "Daniel", "Carly", "Rebby"]
 menu = ["🏠 Home", "🔍 Cerca ed Elimina", "📸 Scanner QR", "➕ Nuova Scatola", "🔄 Alloca/Sposta", "⚙️ Configura Magazzino", "🖨️ Stampa"]
 scelta = st.sidebar.selectbox("Menu Principale", menu)
 
-# Tasto Sveglia per Supabase (Sidebar)
-def upload_foto(file, nome, tipo):
-    # Temporaneamente disattivato Cloudinary per usare Supabase
-    if file:
-        st.warning("⚠️ Il caricamento foto è in fase di aggiornamento per Supabase.")
-    return ""
+# --- CANCELLA DA QUI IN POI (fino a return "") ---
 
 # --- 🏠 HOME ---
 # --- 🏠 HOME (VERSIONE FINALE PER LA FAMIGLIA) ---
@@ -389,7 +362,7 @@ elif scelta == "🔄 Alloca/Sposta":
                 st.rerun()
     else:
         st.warning("Assicurati di avere sia scatole che posizioni configurate.")
-        
+
 # --- ⚙️ CONFIGURA ---
 elif scelta == "⚙️ Configura Magazzino":
     st.image(PATH_CONFIG, width=100)
@@ -519,7 +492,7 @@ elif scelta == "🖨️ Stampa":
         with tab_u:
             pos_complete = db.visualizza_posizioni()
             
-=======
+
 import streamlit as st
 import pandas as pd
 import db_manager
@@ -593,20 +566,10 @@ utenti = ["Victor", "Evelyn", "Daniel", "Carly", "Rebby"]
 menu = ["🏠 Home", "🔍 Cerca ed Elimina", "📸 Scanner QR", "➕ Nuova Scatola", "🔄 Alloca/Sposta", "⚙️ Configura Magazzino", "🖨️ Stampa"]
 scelta = st.sidebar.selectbox("Menu Principale", menu)
 
-# Tasto Sveglia per Supabase (Sidebar)
 
 
-def upload_foto(file, nome, tipo):
-    if file:
-        try:
-            prefisso = (nome[:3].upper()) if len(nome) >= 3 else "BOX"
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            nome_unico = f"{prefisso}_{tipo}_{timestamp}"
-            ris = cloudinary.uploader.upload(file, folder="VHD_Inventario", public_id=nome_unico)
-            return ris['secure_url']
-        except:
-            return ""
-    return ""
+
+
 
 # --- 🏠 HOME ---
 # --- 🏠 HOME (VERSIONE FINALE PER LA FAMIGLIA) ---
@@ -960,4 +923,3 @@ elif scelta == "🖨️ Stampa":
 
         with tab_u:
             pos_complete = db.visualizza_posizioni()
->>>>>>> 95f8f99 (Sistema VHD: Versione finale con tasto offline e stampa)
