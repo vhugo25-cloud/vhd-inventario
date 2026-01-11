@@ -7,3 +7,4 @@ pillow
 xlsxwriter
 openpyxl
 streamlit-qrcode-scanner
+cloudinary

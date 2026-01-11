@@ -8,6 +8,10 @@ import time
 from datetime import datetime
 from streamlit_qrcode_scanner import qrcode_scanner
 
+# --- LIBRERIE PER CLOUDINARY (Aggiunte qui) ---
+import cloudinary
+import cloudinary.uploader
+
 # --- NUOVE LIBRERIE PER LA STAMPA (REPORTLAB) ---
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -15,6 +19,27 @@ from reportlab.lib.units import mm
 
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="Inventario Casa VHD", layout="wide")
+
+# --- FUNZIONE CARICAMENTO FOTO (Da inserire qui) ---
+def upload_foto(file, nome, tipo):
+    if file:
+        try:
+            cloudinary.config(
+                cloud_name = st.secrets["CLOUDINARY_CLOUD_NAME"],
+                api_key = st.secrets["CLOUDINARY_API_KEY"],
+                api_secret = st.secrets["CLOUDINARY_API_SECRET"],
+                secure = True
+            )
+            prefisso = (nome[:3].upper()) if len(nome) >= 3 else "BOX"
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            nome_unico = f"{prefisso}_{tipo}_{timestamp}"
+            
+            ris = cloudinary.uploader.upload(file, folder="VHD_Inventario", public_id=nome_unico)
+            return ris['secure_url']
+        except Exception as e:
+            st.error(f"Errore Cloudinary: {e}")
+            return ""
+    return ""
 
 # --- CONFIGURAZIONE PERCORSI ASSETS ---
 ASSETS_DIR = "assets"
