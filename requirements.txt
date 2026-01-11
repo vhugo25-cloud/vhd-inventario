@@ -1,25 +1,9 @@
-<<<<<<< HEAD
 streamlit
 pandas
 supabase
+cloudinary
+python-dotenv
+qrcode
 reportlab
-qrcode
-pillow
-xlsxwriter
-openpyxl
 streamlit-qrcode-scanner
-cloudinary
-=======
-streamlit
-pandas
-fpdf2
-cloudinary
-pillow
-xlsxwriter
 openpyxl
-qrcode
-streamlit-qrcode-scanner
-postgrest
-storage3
-gotrue
->>>>>>> 95f8f99 (Sistema VHD: Versione finale con tasto offline e stampa)
