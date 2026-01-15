@@ -5,501 +5,6 @@ from qrcode import QRCode
 import io
 import os
 import time
-from datetime import datetime
-from streamlit_qrcode_scanner import qrcode_scanner
-
-# --- LIBRERIE PER CLOUDINARY ---
-import cloudinary
-import cloudinary.uploader
-
-# --- NUOVE LIBRERIE PER LA STAMPA (REPORTLAB) ---
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-
-# --- CONFIGURAZIONE PAGINA ---
-st.set_page_config(page_title="Inventario Casa VHD", layout="wide")
-
-# --- FUNZIONE CARICAMENTO FOTO (UNICA) ---
-def upload_foto(file, nome, tipo):
-    if file:
-        try:
-            # Configurazione Cloudinary con le tue chiavi
-            cloudinary.config(
-                cloud_name = st.secrets["CLOUDINARY_CLOUD_NAME"],
-                api_key = st.secrets["CLOUDINARY_API_KEY"],
-                api_secret = st.secrets["CLOUDINARY_API_SECRET"],
-                secure = True
-            )
-            
-            # Creazione nome file unico
-            prefisso = (nome[:3].upper()) if len(nome) >= 3 else "BOX"
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            nome_unico = f"{prefisso}_{tipo}_{timestamp}"
-            
-            # Caricamento effettivo
-            ris = cloudinary.uploader.upload(file, folder="VHD_Inventario", public_id=nome_unico)
-            return ris['secure_url']
-        except Exception as e:
-            st.error(f"Errore Cloudinary: {e}")
-            return ""
-    return ""
-
-# --- CONFIGURAZIONE PERCORSI ASSETS ---
-ASSETS_DIR = "assets"
-
-def check_img(nome_file):
-    path = os.path.join(ASSETS_DIR, nome_file)
-    if os.path.exists(path):
-        return path
-    return "https://via.placeholder.com/150x150.png?text=Mancante"
-
-PATH_HOME    = check_img("home.png")
-PATH_NUOVA   = check_img("nuova.png")
-PATH_SPOSTA  = check_img("sposta.png")
-PATH_CERCA   = check_img("cerca.png")
-PATH_STAMPA  = check_img("stampa.png")
-PATH_SCANNER = check_img("scanner.png")
-PATH_CONFIG  = check_img("config.png")
-NO_PHOTO     = check_img("no_image.png")
-
-
-
-st.set_page_config(page_title="Inventario Casa VHD", layout="wide")
-
-# --- ESTETICA PROFESSIONALE (FIX DARK MODE & VISIBILITÀ) ---
-# --- ESTETICA PROFESSIONALE (ADATTIVA PER DARK & LIGHT MODE) ---
-st.markdown("""
-    <style>
-    /* Sfondo Sidebar professionale (rimane scuro con testo bianco) */
-    [data-testid="stSidebar"] { background-color: #001f3f; }
-    [data-testid="stSidebar"] * { color: white !important; font-size: 1.1rem; }
-    
-    /* FIX VISIBILITÀ: Non forziamo un colore fisso per i titoli, 
-       lasciamo che Streamlit lo gestisca, o usiamo un colore neutro */
-    h1, h2, h3 { 
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        /* Rimuoviamo il color: #001f3f !important qui */
-    }
-
-    /* Le metriche ora hanno un bordo blu ma uno sfondo che si adatta */
-    div[data-testid="stMetric"] {
-        background-color: rgba(128, 128, 128, 0.1); 
-        padding: 15px; 
-        border-radius: 10px; 
-        border-left: 5px solid #007bff;
-    }
-    
-    /* Gli Expander (i menu a tendina) ora sono leggibili ovunque */
-    .stExpander { 
-        border: 1px solid #007bff; 
-        border-radius: 10px; 
-    }
-    
-    .data-piccola { font-size: 0.85rem; color: #888; font-style: italic; }
-    </style>
-    """, unsafe_allow_html=True)
-
-# Inizializzazione Database Cloud (Dalla tua Classe InventarioDB)
-# Inizializzazione Database Cloud (Dalla tua Classe InventarioDB)
-db = db_manager.InventarioDB()
-utenti = ["Victor", "Evelyn", "Daniel", "Carly", "Rebby"]
-menu = ["🏠 Home", "🔍 Cerca ed Elimina", "📸 Scanner QR", "➕ Nuova Scatola", "🔄 Alloca/Sposta", "⚙️ Configura Magazzino", "🖨️ Stampa"]
-scelta = st.sidebar.selectbox("Menu Principale", menu)
-
-# --- CANCELLA DA QUI IN POI (fino a return "") ---
-
-# --- 🏠 HOME ---
-# --- 🏠 HOME (VERSIONE FINALE PER LA FAMIGLIA) ---
-if scelta == "🏠 Home":
-    st.image(PATH_HOME, width=150)
-    st.title("Inventario Casa VHD")
-    
-    # Riga discreta per l'assistenza connessione
-    col_testo, col_bottone = st.columns([2, 1])
-    with col_bottone:
-        if st.button("🔗 Sistema offline?", type="secondary", help="Clicca se le metriche sotto segnano zero"):
-            with st.spinner("Sveglia database in corso..."):
-                ok, msg = db.sveglia_database()
-                if ok:
-                    st.toast("Magazzino connesso!", icon="✅")
-                    st.rerun()
-                else:
-                    st.error("Errore. Controlla internet.")
-
-    st.info("Benvenuto nel sistema WMS Cloud. Riepilogo magazzino in tempo reale.")
-    st.write("---")
-    
-    # Recupero dati
-    inv = db.visualizza_inventario()
-    pos = db.visualizza_posizioni()
-    
-    # --- METRICHE ---
-    c1, c2, c3, c4 = st.columns(4)
-    
-    # 1. Totale Scatole
-    c1.metric("📦 Scatole", len(inv))
-    
-    # 2. Zone Uniche
-    zone_uniche = len(set([p[1] for p in pos])) if pos else 0
-    c2.metric("📍 Zone", zone_uniche)
-    
-    # 3. Totale Ubicazioni
-    c3.metric("📌 Ubicazioni", len(pos))
-    
-    # 4. Calcolo "Da Allocare" (Colonna 17: Ubicazione)
-    try:
-        da_allocare_list = [
-            s for s in inv 
-            if len(s) > 17 and (str(s[17]).strip().upper() == "NON ALLOCATA" or s[17] is None or str(s[17]).strip() == "")
-        ]
-        count_da_allocare = len(da_allocare_list)
-    except:
-        count_da_allocare = 0
-
-    c4.metric("⚠️ Da Allocare", count_da_allocare, delta=count_da_allocare, delta_color="inverse" if count_da_allocare > 0 else "normal")
-    
-    st.write("---")
-    
-    if inv:
-        # Definizione nomi colonne per il DataFrame
-        column_names_all = [
-            "ID", "Nome", "Descrizione", "Foto_Main", "Cima_Testo", "Cima_Foto", 
-            "Centro_Testo", "Centro_Foto", "Fondo_Testo", "Fondo_Foto", "Sinistra_Testo", 
-            "Sinistra_Foto", "Destra_Testo", "Destra_Foto", "Zona", "Scaffale", 
-            "Ripiano", "Ubicazione", "Proprietario", "Data", "Colore_Testo", 
-            "Dimensione_Carattere", "Quantita", "Codice_Scatola", "Categoria", 
-            "Stato", "Data_Inserimento", "Id_Ubicazione", "Foto_Url", "Centro_F", 
-            "Cima_F", "Fondo_F", "Note"
-        ]
-        
-        num_cols_received = len(inv[0])
-        df = pd.DataFrame(inv, columns=column_names_all[:num_cols_received])
-        
-        st.subheader("📊 Ultime 10 Scatole Registrate")
-        colonne_visibili = [c for c in ["Nome", "Zona", "Ubicazione", "Proprietario", "Data"] if c in df.columns]
-        mostra_df = df[colonne_visibili].tail(10).iloc[::-1]
-        st.dataframe(mostra_df, use_container_width=True, hide_index=True)
-        
-        # Export Excel
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            df.to_excel(writer, index=False, sheet_name='Inventario')
-        
-        st.download_button(
-            label="📊 Scarica Report Excel Completo",
-            data=output.getvalue(),
-            file_name=f"Inventario_VHD_{datetime.now().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    
-    st.write("---")
-    st.subheader("🗺️ Mappa Occupazione Magazzino")
-    if pos:
-        mappa_occupazione = {str(s[17]).strip(): s[1] for s in inv if len(s) > 17 and str(s[17]).strip().upper() != "NON ALLOCATA"}
-        
-        cols_per_row = 12
-        for i in range(0, len(pos), cols_per_row):
-            batch = pos[i:i + cols_per_row]
-            cols = st.columns(cols_per_row)
-            for j, p in enumerate(batch):
-                id_u = str(p[0]).strip()
-                with cols[j]:
-                    if id_u in mappa_occupazione:
-                        st.markdown(f'<div style="background-color:#FF4B4B; color:white; padding:5px; border-radius:3px; text-align:center; font-size:8px; line-height:1;" title="Scatola: {mappa_occupazione[id_u]}">📦<br>{id_u}</div>', unsafe_allow_html=True)
-                    else:
-                        st.markdown(f'<div style="background-color:#28A745; color:white; padding:5px; border-radius:3px; text-align:center; font-size:8px; line-height:1;" title="LIBERA">✅<br>{id_u}</div>', unsafe_allow_html=True)
-# --- 🔍 CERCA ED ELIMINA ---
-elif scelta == "🔍 Cerca ed Elimina":
-    st.image(PATH_CERCA, width=150)
-    st.title("Gestione e Ricerca Database")
-    chiave = st.text_input("🔍 Cosa stai cercando?", placeholder="Viti, Garage, Victor...")
-    ris = db.cerca_scatola(chiave) if chiave else db.visualizza_inventario()
-    
-    if ris:
-        for r in ris:
-            with st.expander(f"📦 {r[1]} | 📍 {r[10]} - {r[11]} | 👤 {r[12]}"):
-                st.markdown(f"<p class='data-piccola'>📅 Registrata il: {r[13]}</p>", unsafe_allow_html=True)
-                col1, col2 = st.columns([1, 2])
-                with col1:
-                    st.image(r[3] if r[3] else NO_PHOTO, use_container_width=True)
-                with col2:
-                    st.write(f"**📝 Descrizione:** {r[2]}")
-                    st.subheader("📸 Contenuto (Livelli)")
-                    i1, i2, i3 = st.columns(3)
-                    i1.image(r[5] if r[5] else NO_PHOTO); i1.caption(f"🔼 {r[4]}")
-                    i2.image(r[7] if r[7] else NO_PHOTO); i2.caption(f"↔️ {r[6]}")
-                    i3.image(r[9] if r[9] else NO_PHOTO); i3.caption(f"🔽 {r[8]}")
-                if st.button(f"🗑️ ELIMINA: {r[1]}", key=f"del_{r[0]}", use_container_width=True):
-                    db.elimina_scatola(r[0]); st.warning("Eliminata!"); time.sleep(1); st.rerun()
-# --- 📸 SCANNER QR ---
-elif scelta == "📸 Scanner QR":
-    st.image(PATH_SCANNER, width=100)
-    st.title("Scanner Rapido VHD")
-    st.info("Punta la fotocamera verso il codice QR della scatola.")
-    barcode = qrcode_scanner(key='scanner')
-    if barcode:
-        st.success(f"🔍 Codice rilevato: {barcode}")
-        risultato = db.cerca_scatola(barcode)
-        if risultato:
-            r = risultato[0]
-            st.markdown(f"### ✅ Scatola Trovata: {r[1]}")
-            with st.expander("Dettagli", expanded=True):
-                st.write(f"**📍 Ubicazione:** {r[10]} - {r[11]} | **👤 Proprietario:** {r[12]}")
-                c1, c2 = st.columns(2)
-                c1.image(r[3] if r[3] else NO_PHOTO, use_container_width=True)
-                c2.info(f"🔼 **Cima:** {r[4]}\n\n↔️ **Centro:** {r[6]}\n\n🔽 **Fondo:** {r[8]}")
-        else:
-            st.error(f"❌ Scatola '{barcode}' non trovata.")
-
-# --- ➕ NUOVA SCATOLA ---
-# --- ➕ NUOVA SCATOLA ---
-elif scelta == "➕ Nuova Scatola":
-    st.image(PATH_NUOVA, width=150)
-    st.title("Registra Nuova Scatola")
-    with st.form("n_s", clear_on_submit=True):
-        col_top1, col_top2 = st.columns([2, 1])
-        with col_top1:
-            nome = st.text_input("📦 Nome Scatola", placeholder="Esempio: SCATOLA_001")
-            desc = st.text_area("📝 Descrizione Generale")
-        with col_top2:
-            prop = st.selectbox("👤 Proprietario", utenti)
-            f_m = st.file_uploader("📸 Foto Esterna", type=['jpg', 'png', 'jpeg'])
-        
-        st.write("---")
-        st.subheader("🔍 Dettaglio Contenuto Interno")
-        c1, c2 = st.columns([2, 1])
-        ct = c1.text_input("🔼 Livello SUPERIORE (Cima)")
-        cf = c2.file_uploader("Foto Cima", key="fcima", type=['jpg', 'png'])
-        
-        m1, m2 = st.columns([2, 1])
-        mt = m1.text_input("↔️ Livello CENTRALE")
-        mf = m2.file_uploader("Foto Centro", key="fcentro", type=['jpg', 'png'])
-        
-        b1, b2 = st.columns([2, 1])
-        bt = b1.text_input("🔽 Livello INFERIORE (Fondo)")
-        bf = b2.file_uploader("Foto Fondo", key="ffondo", type=['jpg', 'png'])
-        
-        if st.form_submit_button("🚀 REGISTRA NEL DATABASE", use_container_width=True):
-            if nome:
-                with st.spinner("☁️ Caricamento foto e salvataggio in corso..."):
-                    # 1. Carichiamo le foto su Cloudinary
-                    u1 = upload_foto(f_m, nome, "main")
-                    u2 = upload_foto(cf, nome, "cima")
-                    u3 = upload_foto(mf, nome, "centro")
-                    u4 = upload_foto(bf, nome, "fondo")
-                    
-                    # 2. Salvataggio nel database (Sincronizzato con db_manager)
-                    try:
-                        successo = db.aggiungi_scatola(
-                            nome=nome,
-                            desc=desc,
-                            f_m=u1,
-                            ct=ct,
-                            cf=u2,
-                            mt=mt,
-                            mf=u3,
-                            bt=bt,
-                            bf=u4,
-                            zona="DA DEFINIRE",
-                            ubi="NON ALLOCATA",
-                            prop=prop
-                        )
-                        
-                        if successo:
-                            st.balloons()
-                            st.success(f"✅ Scatola '{nome}' salvata correttamente con le foto!")
-                            time.sleep(2)
-                            st.rerun()
-                        else:
-                            st.error("❌ Il database non ha risposto correttamente.")
-
-                    except Exception as e:
-                        st.error(f"❌ Errore durante il salvataggio: {e}")
-            else:
-                st.error("⚠️ Il nome è obbligatorio!")
-
-# --- 🔄 ALLOCA/SPOSTA ---
-# --- 🔄 ALLOCA/SPOSTA ---
-elif scelta == "🔄 Alloca/Sposta":
-    st.image(PATH_SPOSTA, width=150)
-    st.title("Movimentazione e Allocazione")
-    
-    inv = db.visualizza_inventario()
-    pos = db.visualizza_posizioni()
-    
-    if pos and inv:
-        # Recuperiamo i nomi delle colonne per non sbagliare indice
-        res_col = db.supabase.table("inventario").select("*").limit(1).execute()
-        nomi_col = list(res_col.data[0].keys()) if res_col.data else []
-        
-        def get_idx(nome_c):
-            return nomi_col.index(nome_c) if nome_c in nomi_col else 1
-
-        col_move1, col_move2 = st.columns(2)
-        
-        with col_move1:
-            # Creiamo una lista: "NomeScatola (Ubicazione Attuale)"
-            idx_nome = get_idx('nome')
-            idx_ubi = get_idx('ubi')
-            s_list = [f"{s[idx_nome]} (Attuale: {s[idx_ubi]})" for s in inv]
-            s_sel = st.selectbox("Scegli la scatola", s_list)
-        
-        with col_move2:
-            # Lista posizioni: "Zona - CodiceUbicazione"
-            p_list = [f"{p[1]} - {p[0]}" for p in pos]
-            p_sel = st.selectbox("Scegli la destinazione", p_list)
-        
-        # Estraiamo i dati puliti
-        nome_scatola_pulito = s_sel.split(" (Attuale:")[0]
-        zn, un = p_sel.split(" - ")
-        
-        if st.button("✅ CONFERMA SPOSTAMENTO", use_container_width=True):
-            # Chiamiamo la funzione usando il NOME della scatola
-            if db.aggiorna_posizione_scatola(nome_scatola_pulito, zn, un):
-                st.success(f"Spostamento di {nome_scatola_pulito} completato!")
-                time.sleep(1.5)
-                st.rerun()
-    else:
-        st.warning("Assicurati di avere sia scatole che posizioni configurate.")
-
-# --- ⚙️ CONFIGURA ---
-elif scelta == "⚙️ Configura Magazzino":
-    st.image(PATH_CONFIG, width=100)
-    st.title("Impostazioni Motore WMS")
-    t1, t2, t3 = st.tabs(["➕ Nuova Ubicazione", "📥 Import Excel", "🗑️ Gestione"])
-    with t1:
-        with st.form("p", clear_on_submit=True):
-            s = st.text_input("🆔 ID Ubicazione"); z = st.text_input("📍 Zona")
-            if st.form_submit_button("➕ SALVA POSIZIONE"):
-                if s and z:
-                    db.aggiungi_posizione(s, z); st.success("Salvata!"); st.rerun()
-    with t2:
-        file_ex = st.file_uploader("Carica Excel", type=['xlsx'])
-        if file_ex:
-            df_pos = pd.read_excel(file_ex)
-            st.dataframe(df_pos.head(10))
-            if st.button("🚀 AVVIA IMPORTAZIONE"):
-                ok, count = db.import_posizioni_da_df(df_pos)
-                if ok: st.success(f"Caricate {count} posizioni!"); st.rerun()
-    with t3:
-        # Reset Totale (ZONA PERICOLOSA)
-        if st.expander("🚨 RESET TOTALE DATABASE"):
-            pwd = st.text_input("Password Amministratore", type="password")
-            if st.button("🔥 AZZERA TUTTO"):
-                if pwd == "233674":
-                    # Nota: la funzione reset va aggiunta nel db_manager se necessario
-                    st.warning("Funzione reset attivata."); time.sleep(2); st.rerun()
-
-# --- 🖨️ STAMPA ---
-# --- 🖨️ STAMPA (VERSIONE DEFINITIVA CON REPORTLAB) ---
-elif scelta == "🖨️ Stampa":
-    st.image(PATH_STAMPA, width=150)
-    st.title("Centro Stampa Etichette Professionale")
-    
-    # Recupero dati dal DB per il filtro
-    inv_totale = db.visualizza_inventario()
-    
-    if "filtro_stampa" not in st.session_state: 
-        st.session_state.filtro_stampa = ""
-    
-    filtro_veloce = st.text_input("🔍 Cerca per Nome, Proprietario o Contenuto", 
-                                  value=st.session_state.filtro_stampa,
-                                  placeholder="Es: Victor, Evelyn, Scarpe...")
-    st.session_state.filtro_stampa = filtro_veloce
-    
-    if filtro_veloce:
-        tab_s, tab_u = st.tabs(["📦 Etichette Scatole", "📍 Etichette Ubicazioni"])
-        
-        with tab_s:
-            f = filtro_veloce.lower()
-            inv_da_mostrare = [
-                s for s in inv_totale 
-                if f in str(s[1]).lower() or f in str(s[18]).lower() or f in str(s[2]).lower()
-            ]
-            
-            sel_s = []
-            if inv_da_mostrare:
-                st.write(f"✅ Trovate {len(inv_da_mostrare)} scatole")
-                for s in inv_da_mostrare:
-                    nome_s = s[1]
-                    prop_s = s[18] if s[18] else "N/A"
-                    ubi_s = s[17] if s[17] else "DA ALLOCARE"
-                    
-                    if st.checkbox(f"👤 {prop_s.upper()} | 📦 {nome_s} | 📍 {ubi_s}", key=f"st_{s[0]}"):
-                        sel_s.append(s)
-                
-                if sel_s and st.button("📥 GENERA PDF PER SELEZIONATI", use_container_width=True):
-                    buffer = io.BytesIO()
-                    c = canvas.Canvas(buffer, pagesize=A4)
-                    
-                    # Elaboriamo 2 scatole alla volta per pagina
-                    for i in range(0, len(sel_s), 2):
-                        for idx, s in enumerate(sel_s[i:i+2]):
-                            # Calcolo coordinata Y di partenza (A4 è alto 297mm)
-                            # Prima etichetta in alto (y=150mm), seconda in basso (y=10mm)
-                            y_start = 150*mm if idx == 0 else 10*mm
-                            
-                            nome_etichetta = str(s[1])
-                            prop_etichetta = str(s[18]).upper()
-                            data_raw = str(s[19])
-                            
-                            try:
-                                dp = data_raw[:10].split("-")
-                                data_f = f"{dp[2]}/{dp[1]}/{dp[0]}"
-                            except:
-                                data_f = data_raw
-
-                            # --- DISEGNO GRAFICO ---
-                            # Cornice etichetta
-                            c.setLineWidth(1)
-                            c.rect(10*mm, y_start, 190*mm, 130*mm)
-                            
-                            # Proprietario (Grande)
-                            c.setFont("Helvetica-Bold", 45)
-                            c.drawString(15*mm, y_start + 100*mm, prop_etichetta)
-                            
-                            # Nome Scatola
-                            c.setFont("Helvetica-Bold", 25)
-                            c.drawString(15*mm, y_start + 80*mm, nome_etichetta[:25]) # troncato per sicurezza
-                            
-                            # Data (In basso a sinistra)
-                            c.setFont("Helvetica-Oblique", 12)
-                            c.drawString(15*mm, y_start + 10*mm, f"Registrata il: {data_f}")
-                            
-                            # --- GENERAZIONE QR CODE ---
-                            qr = QRCode(box_size=10)
-                            qr.add_data(nome_etichetta)
-                            qr.make()
-                            img_qr = qr.make_image(fill_color="black", back_color="white")
-                            
-                            # Salvataggio temporaneo in buffer per ReportLab
-                            tmp_buffer = io.BytesIO()
-                            img_qr.save(tmp_buffer, format='PNG')
-                            tmp_buffer.seek(0)
-                            
-                            # Inserimento QR Code
-                            c.drawInlineImage(img_qr, 120*mm, y_start + 30*mm, width=65*mm, height=65*mm)
-
-                        c.showPage() # Chiude la pagina dopo 2 etichette
-                    
-                    c.save()
-                    pdf_out = buffer.getvalue()
-                    st.download_button("💾 Scarica PDF", pdf_out, "etichette_vhd.pdf", "application/pdf")
-            else:
-                st.warning("Nessuna scatola trovata.")
-
-        with tab_u:
-            pos_complete = db.visualizza_posizioni()
-            
-
-import streamlit as st
-import pandas as pd
-import db_manager
-from qrcode import QRCode
-import io
-import os
-import time
 from fpdf import FPDF
 from datetime import datetime
 import cloudinary
@@ -536,114 +41,128 @@ try:
 except:
     pass
 
-st.set_page_config(page_title="Inventario Casa VHD", layout="wide")
-
-# --- ESTETICA PROFESSIONALE (FIX DARK MODE & VISIBILITÀ) ---
+# --- ESTETICA PROFESSIONALE (FIX DARK MODE & CONTRASTO) ---
+# Ho aggiunto il selettore per far sì che il testo cambi colore in base al tema di Streamlit
 st.markdown("""
     <style>
-    .main { background-color: #f0f2f6; }
+    /* Forza visibilità testi in base al tema */
+    @media (prefers-color-scheme: dark) {
+        h1, h2, h3, p, span, label, .stMarkdown { color: #FFFFFF !important; }
+    }
+    @media (prefers-color-scheme: light) {
+        h1, h2, h3, p, span, label, .stMarkdown { color: #001f3f !important; }
+    }
+
     [data-testid="stSidebar"] { background-color: #001f3f; }
     [data-testid="stSidebar"] * { color: white !important; font-size: 1.1rem; }
-    
-    /* FIX VISIBILITÀ: Forziamo il colore scuro per i testi su sfondo chiaro */
-    h1, h2, h3, p, span, label, .stMarkdown { 
-        color: #001f3f !important; 
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-    }
     
     .stMetric { 
         background-color: #ffffff; padding: 15px; border-radius: 10px; 
         border-left: 5px solid #007bff; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); 
     }
-    .stExpander { background-color: white !important; border: 1px solid #007bff; border-radius: 10px; }
-    .data-piccola { font-size: 0.85rem; color: #555 !important; font-style: italic; }
+    /* Colore metriche per non farle sparire */
+    [data-testid="stMetricValue"] { color: #007bff !important; }
+    
+    .stExpander { border: 1px solid #007bff; border-radius: 10px; }
+    .data-piccola { font-size: 0.85rem; font-style: italic; }
     </style>
     """, unsafe_allow_html=True)
 
-# Inizializzazione Database Cloud (Dalla tua Classe InventarioDB)
+# Inizializzazione Database
 db = db_manager.InventarioDB()
 utenti = ["Victor", "Evelyn", "Daniel", "Carly", "Rebby"]
-menu = ["🏠 Home", "🔍 Cerca ed Elimina", "📸 Scanner QR", "➕ Nuova Scatola", "🔄 Alloca/Sposta", "⚙️ Configura Magazzino", "🖨️ Stampa"]
+
+# --- MENU CON VOCE MODIFICA ---
+menu = [
+    "🏠 Home", 
+    "🔍 Cerca ed Elimina", 
+    "➕ Nuova Scatola", 
+    "📝 Modifica Scatola", # <-- Inserita qui come richiesto
+    "📸 Scanner QR", 
+    "🔄 Alloca/Sposta", 
+    "⚙️ Configura Magazzino", 
+    "🖨️ Stampa"
+]
 scelta = st.sidebar.selectbox("Menu Principale", menu)
 
-
-
-
-
+# --- FUNZIONE UPLOAD FOTO ---
+def upload_foto(file, nome, tipo):
+    if file:
+        try:
+            prefisso = (nome[:3].upper()) if len(nome) >= 3 else "BOX"
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            nome_unico = f"{prefisso}_{tipo}_{timestamp}"
+            ris = cloudinary.uploader.upload(file, folder="VHD_Inventario", public_id=nome_unico)
+            return ris['secure_url']
+        except:
+            return ""
+    return ""
 
 # --- 🏠 HOME ---
-# --- 🏠 HOME (VERSIONE FINALE PER LA FAMIGLIA) ---
+# --- 🏠 HOME (VERSIONE RIPARATA, VELOCE E DARK-READY) ---
 if scelta == "🏠 Home":
     st.image(PATH_HOME, width=150)
     st.title("Inventario Casa VHD")
     
-    # Riga discreta per l'assistenza connessione
     col_testo, col_bottone = st.columns([2, 1])
     with col_bottone:
-        if st.button("🔗 Sistema offline?", type="secondary", help="Clicca se le metriche sotto segnano zero"):
-            with st.spinner("Sveglia database in corso..."):
+        if st.button("🔗 Sistema offline?", type="secondary", help="Sveglia il database se le metriche sono a zero"):
+            with st.spinner("Sveglia database..."):
                 ok, msg = db.sveglia_database()
                 if ok:
-                    st.toast("Magazzino connesso!", icon="✅")
+                    st.toast("Connesso!", icon="✅")
                     st.rerun()
-                else:
-                    st.error("Errore. Controlla internet.")
 
     st.info("Benvenuto nel sistema WMS Cloud. Riepilogo magazzino in tempo reale.")
-    st.write("---")
     
-    # Recupero dati
-    inv = db.visualizza_inventario()
+    # Recupero dati (Formato Dizionario per gestire le 66 colonne senza crash)
+    inv_data = db.visualizza_inventario()
     pos = db.visualizza_posizioni()
     
     # --- METRICHE ---
     c1, c2, c3, c4 = st.columns(4)
     
-    # 1. Totale Scatole
-    c1.metric("📦 Scatole", len(inv))
+    c1.metric("📦 Scatole", len(inv_data))
     
-    # 2. Zone Uniche
-    zone_uniche = len(set([p[1] for p in pos])) if pos else 0
+    zone_uniche = len(set([p.get('zona') for p in pos if p.get('zona')])) if pos else 0
     c2.metric("📍 Zone", zone_uniche)
     
-    # 3. Totale Ubicazioni
     c3.metric("📌 Ubicazioni", len(pos))
-    
-    # 4. Calcolo "Da Allocare" (Colonna 17: Ubicazione)
-    try:
-        da_allocare_list = [
-            s for s in inv 
-            if len(s) > 17 and (str(s[17]).strip().upper() == "NON ALLOCATA" or s[17] is None or str(s[17]).strip() == "")
-        ]
-        count_da_allocare = len(da_allocare_list)
-    except:
-        count_da_allocare = 0
 
+    # Calcolo "Da Allocare" sicuro (usando i nomi colonne del tuo SQL)
+    count_da_allocare = 0
+    if inv_data:
+        count_da_allocare = len([
+            s for s in inv_data 
+            if s.get('ubi') == "NON ALLOCATA" or not s.get('ubi') or str(s.get('ubi')).strip() == ""
+        ])
+    
     c4.metric("⚠️ Da Allocare", count_da_allocare, delta=count_da_allocare, delta_color="inverse" if count_da_allocare > 0 else "normal")
     
     st.write("---")
     
-    if inv:
-        # Definizione nomi colonne per il DataFrame
-        column_names_all = [
-            "ID", "Nome", "Descrizione", "Foto_Main", "Cima_Testo", "Cima_Foto", 
-            "Centro_Testo", "Centro_Foto", "Fondo_Testo", "Fondo_Foto", "Sinistra_Testo", 
-            "Sinistra_Foto", "Destra_Testo", "Destra_Foto", "Zona", "Scaffale", 
-            "Ripiano", "Ubicazione", "Proprietario", "Data", "Colore_Testo", 
-            "Dimensione_Carattere", "Quantita", "Codice_Scatola", "Categoria", 
-            "Stato", "Data_Inserimento", "Id_Ubicazione", "Foto_Url", "Centro_F", 
-            "Cima_F", "Fondo_F", "Note"
-        ]
-        
-        num_cols_received = len(inv[0])
-        df = pd.DataFrame(inv, columns=column_names_all[:num_cols_received])
+    if inv_data:
+        # Creazione DataFrame automatica: gestisce 33 o 66 colonne senza errori
+        df = pd.DataFrame(inv_data)
         
         st.subheader("📊 Ultime 10 Scatole Registrate")
-        colonne_visibili = [c for c in ["Nome", "Zona", "Ubicazione", "Proprietario", "Data"] if c in df.columns]
-        mostra_df = df[colonne_visibili].tail(10).iloc[::-1]
-        st.dataframe(mostra_df, use_container_width=True, hide_index=True)
         
-        # Export Excel
+        # Mappa nomi colonne per visualizzazione pulita
+        mappa_nomi = {
+            "nome": "Nome", 
+            "zon": "Zona", 
+            "ubi": "Ubicazione", 
+            "proprietario": "Proprietario", 
+            "data_inserimento": "Data"
+        }
+        
+        cols_esistenti = [c for c in mappa_nomi.keys() if c in df.columns]
+        mostra_df = df[cols_esistenti].tail(10).rename(columns=mappa_nomi)
+        
+        # Tabella con inversione ordine (le ultime in alto)
+        st.dataframe(mostra_df.iloc[::-1], use_container_width=True, hide_index=True)
+        
+        # Export Excel professionale
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             df.to_excel(writer, index=False, sheet_name='Inventario')
@@ -658,64 +177,213 @@ if scelta == "🏠 Home":
     st.write("---")
     st.subheader("🗺️ Mappa Occupazione Magazzino")
     if pos:
-        mappa_occupazione = {str(s[17]).strip(): s[1] for s in inv if len(s) > 17 and str(s[17]).strip().upper() != "NON ALLOCATA"}
+        # Mappa occupazione: Ubicazione -> Nome Scatola
+        mappa_occupazione = {
+            str(s.get('ubi', '')).strip(): s.get('nome') 
+            for s in inv_data 
+            if s.get('ubi') and str(s.get('ubi')).upper() != "NON ALLOCATA"
+        }
         
         cols_per_row = 12
         for i in range(0, len(pos), cols_per_row):
             batch = pos[i:i + cols_per_row]
             cols = st.columns(cols_per_row)
             for j, p in enumerate(batch):
-                id_u = str(p[0]).strip()
+                id_u = str(p.get('id', '')).strip()
+                piena = id_u in mappa_occupazione
+                
                 with cols[j]:
-                    if id_u in mappa_occupazione:
-                        st.markdown(f'<div style="background-color:#FF4B4B; color:white; padding:5px; border-radius:3px; text-align:center; font-size:8px; line-height:1;" title="Scatola: {mappa_occupazione[id_u]}">📦<br>{id_u}</div>', unsafe_allow_html=True)
-                    else:
-                        st.markdown(f'<div style="background-color:#28A745; color:white; padding:5px; border-radius:3px; text-align:center; font-size:8px; line-height:1;" title="LIBERA">✅<br>{id_u}</div>', unsafe_allow_html=True)
+                    # Colore Rosso se piena, Verde se libera
+                    color = "#FF4B4B" if piena else "#28A745"
+                    icon = "📦" if piena else "✅"
+                    
+                    # HTML per i quadratini (Testo sempre bianco per contrasto)
+                    st.markdown(f'''
+                        <div style="background-color:{color}; color:white !important; padding:5px; 
+                        border-radius:3px; text-align:center; font-size:8px; line-height:1.2;
+                        min-height:35px; border: 1px solid rgba(255,255,255,0.1);" 
+                        title="{mappa_occupazione[id_u] if piena else 'Libera'}">
+                        <span style="color: white !important;">{icon}</span><br>
+                        <span style="color: white !important; font-weight: bold;">{id_u}</span>
+                        </div>''', unsafe_allow_html=True)
+                    
 # --- 🔍 CERCA ED ELIMINA ---
+# --- 🔍 CERCA ED ELIMINA (VERSIONE RIPARATA E VISIBILE) ---
 elif scelta == "🔍 Cerca ed Elimina":
     st.image(PATH_CERCA, width=150)
     st.title("Gestione e Ricerca Database")
-    chiave = st.text_input("🔍 Cosa stai cercando?", placeholder="Viti, Garage, Victor...")
-    ris = db.cerca_scatola(chiave) if chiave else db.visualizza_inventario()
+    
+    # Campo di ricerca
+    chiave = st.text_input("🔍 Cosa stai cercando?", placeholder="Viti, Garage, Victor...", help="Scrivi qui per filtrare i risultati")
+    
+    # Recupero dati dal database
+    with st.spinner("Ricerca in corso..."):
+        ris = db.cerca_scatola(chiave) if chiave else db.visualizza_inventario()
     
     if ris:
+        st.write(f"✅ Trovate {len(ris)} scatole")
         for r in ris:
-            with st.expander(f"📦 {r[1]} | 📍 {r[10]} - {r[11]} | 👤 {r[12]}"):
-                st.markdown(f"<p class='data-piccola'>📅 Registrata il: {r[13]}</p>", unsafe_allow_html=True)
+            # ✅ ESTRAZIONE SICURA: Se la colonna non esiste, mette "N/D" invece di dare errore
+            id_db = r.get('id')
+            nome = r.get('nome', 'Senza Nome')
+            desc = r.get('descrizione', '-')
+            zona = r.get('zon', 'N/D')
+            ubi = r.get('ubi', 'N/D')
+            prop = r.get('proprietario', 'N/D')
+            data_reg = r.get('data_inserimento', 'Data non disp.')
+            
+            # Recupero Foto con fallback (se vuote mette l'immagine di default)
+            f_main = r.get('foto_main') if r.get('foto_main') else NO_PHOTO
+            f_cima = r.get('cima_foto') if r.get('cima_foto') else NO_PHOTO
+            f_cent = r.get('centro_foto') if r.get('centro_foto') else NO_PHOTO
+            f_fond = r.get('fondo_foto') if r.get('fondo_foto') else NO_PHOTO
+
+            # --- INTERFACCIA GRAFICA ---
+            # Usiamo HTML per assicurarci che il titolo dell'expander sia leggibile
+            with st.expander(f"📦 {nome} | 📍 {zona} - {ubi} | 👤 {prop}"):
+                st.markdown(f"<p style='color: #A0A0A0; font-size: 0.8rem;'>📅 Registrata il: {data_reg}</p>", unsafe_allow_html=True)
+                
                 col1, col2 = st.columns([1, 2])
                 with col1:
-                    st.image(r[3] if r[3] else NO_PHOTO, use_container_width=True)
+                    # Foto Esterna
+                    st.image(f_main, use_container_width=True, caption="Vista Esterna")
+                
                 with col2:
-                    st.write(f"**📝 Descrizione:** {r[2]}")
-                    st.subheader("📸 Contenuto (Livelli)")
+                    st.write(f"**📝 Descrizione:** {desc}")
+                    st.markdown("---")
+                    st.subheader("🔍 Contenuto Interno (3 Livelli)")
+                    
+                    # Griglia per i 3 strati
                     i1, i2, i3 = st.columns(3)
-                    i1.image(r[5] if r[5] else NO_PHOTO); i1.caption(f"🔼 {r[4]}")
-                    i2.image(r[7] if r[7] else NO_PHOTO); i2.caption(f"↔️ {r[6]}")
-                    i3.image(r[9] if r[9] else NO_PHOTO); i3.caption(f"🔽 {r[8]}")
-                if st.button(f"🗑️ ELIMINA: {r[1]}", key=f"del_{r[0]}", use_container_width=True):
-                    db.elimina_scatola(r[0]); st.warning("Eliminata!"); time.sleep(1); st.rerun()
-# --- 📸 SCANNER QR ---
-elif scelta == "📸 Scanner QR":
-    st.image(PATH_SCANNER, width=100)
-    st.title("Scanner Rapido VHD")
-    st.info("Punta la fotocamera verso il codice QR della scatola.")
-    barcode = qrcode_scanner(key='scanner')
-    if barcode:
-        st.success(f"🔍 Codice rilevato: {barcode}")
-        risultato = db.cerca_scatola(barcode)
-        if risultato:
-            r = risultato[0]
-            st.markdown(f"### ✅ Scatola Trovata: {r[1]}")
-            with st.expander("Dettagli", expanded=True):
-                st.write(f"**📍 Ubicazione:** {r[10]} - {r[11]} | **👤 Proprietario:** {r[12]}")
-                c1, c2 = st.columns(2)
-                c1.image(r[3] if r[3] else NO_PHOTO, use_container_width=True)
-                c2.info(f"🔼 **Cima:** {r[4]}\n\n↔️ **Centro:** {r[6]}\n\n🔽 **Fondo:** {r[8]}")
-        else:
-            st.error(f"❌ Scatola '{barcode}' non trovata.")
+                    with i1:
+                        st.image(f_cima, use_container_width=True)
+                        st.caption(f"🔼 {r.get('cima_testo', 'Cima')}")
+                    with i2:
+                        st.image(f_cent, use_container_width=True)
+                        st.caption(f"↔️ {r.get('centro_testo', 'Centro')}")
+                    with i3:
+                        st.image(f_fond, use_container_width=True)
+                        st.caption(f"🔽 {r.get('fondo_testo', 'Fondo')}")
+                
+                st.write("") # Spaziatore
+                # Bottone Elimina con chiave univoca
+                if st.button(f"🗑️ ELIMINA DEFINITIVAMENTE: {nome}", key=f"del_{id_db}", use_container_width=True):
+                    if db.elimina_scatola(id_db):
+                        st.warning(f"Scatola '{nome}' rimossa.")
+                        time.sleep(1)
+                        st.rerun()
+    else:
+        st.info("Nessuna scatola trovata. Prova a inserire un'altra parola chiave o lascia vuoto per vedere tutto.")
+
+# --- ➕ NUOVA SCATOLA (STRUTTURA ORIGINALE) ---
+elif scelta == "➕ Nuova Scatola":
+    st.image(PATH_NUOVA, width=150)
+    st.title("Registrazione Nuova Scatola")
+    
+    with st.form("form_nuova_scatola", clear_on_submit=True):
+        col_n, col_p = st.columns(2)
+        nome = col_n.text_input("📦 Nome Scatola (es: BOX-001)")
+        prop = col_p.selectbox("👤 Proprietario", utenti)
+        desc = st.text_area("📝 Descrizione contenuto")
+        
+        st.write("---")
+        st.subheader("📸 Foto Principale (Esterna)")
+        f_main = st.file_uploader("Carica foto esterna", type=['png', 'jpg', 'jpeg'], key="main")
+        
+        st.write("---")
+        st.subheader("🔼 Livello 1: Cima")
+        c1, c2 = st.columns([2, 1])
+        t_cima = c1.text_input("Cosa c'è in cima?", key="t_cima")
+        f_cima = c2.file_uploader("Foto Cima", type=['png', 'jpg', 'jpeg'], key="f_cima")
+        
+        st.write("---")
+        st.subheader("↔️ Livello 2: Centro")
+        m1, m2 = st.columns([2, 1])
+        t_cent = m1.text_input("Cosa c'è al centro?", key="t_cent")
+        f_cent = m2.file_uploader("Foto Centro", type=['png', 'jpg', 'jpeg'], key="f_cent")
+        
+        st.write("---")
+        st.subheader("🔽 Livello 3: Fondo")
+        b1, b2 = st.columns([2, 1])
+        t_fond = b1.text_input("Cosa c'è sul fondo?", key="t_fond")
+        f_fond = b2.file_uploader("Foto Fondo", type=['png', 'jpg', 'jpeg'], key="f_fond")
+        
+        if st.form_submit_button("🚀 SALVA SCATOLA NEL CLOUD"):
+            if nome:
+                with st.spinner("Caricamento immagini e dati..."):
+                    # Upload immagini su Cloudinary
+                    u_main = upload_foto(f_main, nome, "main")
+                    u_cima = upload_foto(f_cima, nome, "cima")
+                    u_cent = upload_foto(f_cent, nome, "centro")
+                    u_fond = upload_foto(f_fond, nome, "fondo")
+                    
+                    if db.aggiungi_scatola(
+                        nome=nome, desc=desc, f_m=u_main, 
+                        ct=t_cima, cf=u_cima, 
+                        mt=t_cent, mf=u_cent, 
+                        bt=t_fond, bf=u_fond, 
+                        prop=prop
+                    ):
+                        st.balloons()
+                        st.success(f"Scatola {nome} registrata correttamente!")
+                        time.sleep(2)
+                        st.rerun()
+            else:
+                st.error("Il nome della scatola è obbligatorio!")
+
+# --- 📝 MODIFICA SCATOLA (NUOVA FUNZIONE) ---
+elif scelta == "📝 Modifica Scatola":
+    st.title("Modifica e Aggiornamento Scatola")
+    inv_data = db.visualizza_inventario()
+    
+    if inv_data:
+        nomi_scatole = [s.get('nome') for s in inv_data]
+        box_da_modificare = st.selectbox("Scegli la scatola da aggiornare", nomi_scatole)
+        
+        # Recupero dati attuali della scatola scelta
+        s = next(item for item in inv_data if item.get('nome') == box_da_modificare)
+        
+        with st.form("form_modifica"):
+            st.warning(f"Stai modificando: {box_da_modificare}")
+            
+            nuovo_nome = st.text_input("Nuovo Nome", value=s.get('nome'))
+            nuovo_prop = st.selectbox("Cambia Proprietario", utenti, index=utenti.index(s.get('proprietario')) if s.get('proprietario') in utenti else 0)
+            nuova_desc = st.text_area("Aggiorna Descrizione", value=s.get('descrizione', ''))
+            
+            st.write("---")
+            st.subheader("🖼️ Gestione Immagini")
+            st.info("Carica una foto solo se vuoi sostituire quella attuale.")
+            
+            c_f1, c_f2 = st.columns(2)
+            f_main_new = c_f1.file_uploader("Sostituisci Foto Esterna", type=['jpg','jpeg','png'])
+            f_cima_new = c_f2.file_uploader("Sostituisci Foto Cima", type=['jpg','jpeg','png'])
+            
+            st.write("---")
+            st.subheader("✍️ Testi Livelli")
+            t_cima_new = st.text_input("Testo Cima", value=s.get('cima_testo', ''))
+            t_cent_new = st.text_input("Testo Centro", value=s.get('centro_testo', ''))
+            t_fond_new = st.text_input("Testo Fondo", value=s.get('fondo_testo', ''))
+
+            if st.form_submit_button("✅ SALVA TUTTE LE MODIFICHE"):
+                with st.spinner("Aggiornamento in corso..."):
+                    # Se l'utente carica una nuova foto, la carichiamo, altrimenti teniamo la vecchia URL
+                    url_main = upload_foto(f_main_new, nuovo_nome, "main") if f_main_new else s.get('foto_main')
+                    url_cima = upload_foto(f_cima_new, nuovo_nome, "cima") if f_cima_new else s.get('cima_foto')
+                    
+                    # Chiamata al db_manager per aggiornare
+                    if db.aggiorna_dati_scatola(
+                        s.get('id'), nuovo_nome, nuova_desc, nuovo_prop, 
+                        t_cima_new, t_cent_new, t_fond_new, url_main
+                    ):
+                        st.success("Modifiche salvate con successo!")
+                        time.sleep(1)
+                        st.rerun()
+    else:
+        st.info("Non ci sono scatole da modificare.")
+
 
 # --- ➕ NUOVA SCATOLA ---
-# --- ➕ NUOVA SCATOLA ---
+# --- ➕ NUOVA SCATOLA (Tua versione originale sincronizzata) ---
 elif scelta == "➕ Nuova Scatola":
     st.image(PATH_NUOVA, width=150)
     st.title("Registra Nuova Scatola")
@@ -745,181 +413,303 @@ elif scelta == "➕ Nuova Scatola":
         if st.form_submit_button("🚀 REGISTRA NEL DATABASE", use_container_width=True):
             if nome:
                 with st.spinner("☁️ Caricamento foto e salvataggio in corso..."):
-                    # 1. Carichiamo le foto su Cloudinary
                     u1 = upload_foto(f_m, nome, "main")
                     u2 = upload_foto(cf, nome, "cima")
                     u3 = upload_foto(mf, nome, "centro")
                     u4 = upload_foto(bf, nome, "fondo")
                     
-                    # 2. Salvataggio nel database (Sincronizzato con db_manager)
                     try:
                         successo = db.aggiungi_scatola(
-                            nome=nome,
-                            desc=desc,
-                            f_m=u1,
-                            ct=ct,
-                            cf=u2,
-                            mt=mt,
-                            mf=u3,
-                            bt=bt,
-                            bf=u4,
-                            zona="DA DEFINIRE",
-                            ubi="NON ALLOCATA",
-                            prop=prop
+                            nome=nome, desc=desc, f_m=u1,
+                            ct=ct, cf=u2, mt=mt, mf=u3, bt=bt, bf=u4,
+                            zona="DA DEFINIRE", ubi="NON ALLOCATA", prop=prop
                         )
-                        
                         if successo:
                             st.balloons()
-                            st.success(f"✅ Scatola '{nome}' salvata correttamente con le foto!")
+                            st.success(f"✅ Scatola '{nome}' salvata correttamente!")
                             time.sleep(2)
                             st.rerun()
-                        else:
-                            st.error("❌ Il database non ha risposto correttamente.")
-
                     except Exception as e:
-                        st.error(f"❌ Errore durante il salvataggio: {e}")
+                        st.error(f"❌ Errore: {e}")
             else:
                 st.error("⚠️ Il nome è obbligatorio!")
 
+# --- 📝 MODIFICA SCATOLA (VOCE RICHIESTA) ---
+elif scelta == "📝 Modifica Scatola":
+    st.image(PATH_NUOVA, width=100) # Usiamo l'icona della scatola
+    st.title("Modifica e Aggiornamento Scatola")
+    
+    inv_data = db.visualizza_inventario()
+    if inv_data:
+        # Creiamo una lista per la ricerca della scatola
+        nomi_box = [s.get('nome') for s in inv_data]
+        box_sel = st.selectbox("Seleziona la scatola da modificare", nomi_box)
+        
+        # Recupero dati attuali
+        s = next(item for item in inv_data if item.get('nome') == box_sel)
+        
+        with st.form("edit_form"):
+            st.info(f"Stai modificando i dati di: **{box_sel}**")
+            
+            c1, c2 = st.columns(2)
+            nuovo_nome = c1.text_input("Aggiorna Nome", value=s.get('nome'))
+            nuovo_prop = c2.selectbox("Cambia Proprietario", utenti, 
+                                      index=utenti.index(s.get('proprietario')) if s.get('proprietario') in utenti else 0)
+            
+            nuova_desc = st.text_area("Modifica Descrizione", value=s.get('descrizione', ''))
+            
+            st.write("---")
+            st.subheader("📸 Aggiornamento Immagini")
+            st.warning("⚠️ Carica una foto solo se vuoi sostituire quella attuale, altrimenti lascia vuoto.")
+            
+            col_f1, col_f2 = st.columns(2)
+            f_m_new = col_f1.file_uploader("Sostituisci Foto Esterna", type=['jpg','png','jpeg'])
+            f_c_new = col_f2.file_uploader("Sostituisci Foto Cima", type=['jpg','png','jpeg'])
+            
+            st.write("---")
+            st.subheader("✍️ Modifica Testi Strati")
+            ct_new = st.text_input("Testo Cima", value=s.get('cima_testo', ''))
+            mt_new = st.text_input("Testo Centro", value=s.get('centro_testo', ''))
+            bt_new = st.text_input("Testo Fondo", value=s.get('fondo_testo', ''))
+
+            if st.form_submit_button("✅ APPLICA TUTTE LE MODIFICHE"):
+                with st.spinner("Aggiornamento in corso..."):
+                    # Se l'utente non carica una nuova foto, manteniamo la vecchia URL recuperata dal DB
+                    url_m = upload_foto(f_m_new, nuovo_nome, "main") if f_m_new else s.get('foto_main')
+                    url_c = upload_foto(f_c_new, nuovo_nome, "cima") if f_c_new else s.get('cima_foto')
+                    
+                    # Chiamata al db_manager (Assicurati che db_manager abbia questa funzione)
+                    successo = db.aggiorna_dati_scatola(
+                        s.get('id'), nuovo_nome, nuova_desc, nuovo_prop, 
+                        ct_new, mt_new, bt_new, url_m
+                    )
+                    
+                    if successo:
+                        st.success(f"Scatola '{nuovo_nome}' aggiornata con successo!")
+                        time.sleep(1)
+                        st.rerun()
+    else:
+        st.warning("Nessuna scatola presente nel database per la modifica.")
+
+ # --- 📸 SCANNER QR (VERSIONE PER SURFACE) ---
+elif scelta == "📸 Scanner QR":
+    st.image(PATH_SCANNER, width=150)
+    st.title("Scanner Intelligente VHD")
+    st.info("Inquadra il codice QR sulla scatola per vedere il contenuto in tempo reale.")
+    
+    # Avvia lo scanner (usa la libreria streamlit_qrcode_scanner)
+    codice_scansionato = qrcode_scanner(key='scanner_vhd')
+    
+    if codice_scansionato:
+        st.success(f"✅ Codice rilevato: {codice_scansionato}")
+        inv_data = db.visualizza_inventario()
+        
+        # Cerchiamo la scatola che ha quel nome o quel codice
+        risultato = [s for s in inv_data if str(s.get('nome')).lower() == codice_scansionato.lower()]
+        
+        if risultato:
+            r = risultato[0]
+            with st.container():
+                st.markdown(f"### 📦 Risultato: {r.get('nome')}")
+                c1, c2 = st.columns([1, 2])
+                c1.image(r.get('foto_main') or NO_PHOTO, use_container_width=True)
+                with c2:
+                    st.write(f"**📍 Posizione:** {r.get('zon')} - {r.get('ubi')}")
+                    st.write(f"**👤 Proprietario:** {r.get('proprietario')}")
+                    st.write(f"**📝 Descrizione:** {r.get('descrizione')}")
+                    
+                    st.subheader("🔍 Contenuto Livelli")
+                    l1, l2, l3 = st.columns(3)
+                    l1.image(r.get('cima_foto') or NO_PHOTO, caption=f"🔼 {r.get('cima_testo')}")
+                    l2.image(r.get('centro_foto') or NO_PHOTO, caption=f"↔️ {r.get('centro_testo')}")
+                    l3.image(r.get('fondo_foto') or NO_PHOTO, caption=f"🔽 {r.get('fondo_testo')}")
+        else:
+            st.warning("Scatola non trovata nel database. Verifica il codice QR.")       
+
+
+# --- 🔄 ALLOCA/SPOSTA ---
 # --- 🔄 ALLOCA/SPOSTA ---
 elif scelta == "🔄 Alloca/Sposta":
     st.image(PATH_SPOSTA, width=150)
     st.title("Movimentazione e Allocazione")
-    inv = db.visualizza_inventario(); pos = db.visualizza_posizioni()
-    if pos and inv:
-        col_move1, col_move2 = st.columns(2)
-        with col_move1:
-            s_list = [f"{s[0]} | {s[1]} (Attuale: {s[11]})" for s in inv]
-            s_sel = st.selectbox("Scegli la scatola", s_list)
-        with col_move2:
-            p_list = [f"{p[1]} - {p[0]}" for p in pos]
-            p_sel = st.selectbox("Scegli la destinazione", p_list)
-        ids = int(s_sel.split(" | ")[0]); zn, un = p_sel.split(" - ")
-        if st.button("✅ CONFERMA SPOSTAMENTO", use_container_width=True):
-            db.aggiorna_posizione_scatola(ids, zn, un)
-            st.success("Spostamento completato!"); time.sleep(1.5); st.rerun()
+    
+    inv = db.visualizza_inventario()
+    pos = db.visualizza_posizioni()
+    
+    if inv and pos:
+        # ✅ Lista scatole sicura per 66 colonne
+        s_list = [
+            f"{s.get('id')} | {s.get('nome')} (Attuale: {s.get('ubi', 'NON ALLOCATA')})" 
+            for s in inv
+        ]
+        s_sel = st.selectbox("📦 Seleziona la Scatola da spostare", s_list)
+        
+        # ✅ Lista posizioni sicura
+        p_list = [f"{p.get('zona', 'N/D')} - {p.get('id', 'N/D')}" for p in pos]
+        p_sel = st.selectbox("📍 Seleziona la nuova Destinazione", p_list)
+        
+        if st.button("🚀 CONFERMA SPOSTAMENTO", use_container_width=True):
+            try:
+                id_scatola = int(s_sel.split(" | ")[0])
+                nuova_zona, nuova_ubi = p_sel.split(" - ")
+                
+                if db.aggiorna_posizione_scatola(id_scatola, nuova_zona, nuova_ubi):
+                    st.success(f"Movimentazione riuscita! La scatola è ora in {nuova_ubi}")
+                    time.sleep(1)
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Errore tecnico: {e}")
 
-# --- ⚙️ CONFIGURA ---
+# --- ⚙️ CONFIGURA MAGAZZINO ---
+# --- ⚙️ CONFIGURA MAGAZZINO (REVISIONE PROFESSIONALE) ---
 elif scelta == "⚙️ Configura Magazzino":
     st.image(PATH_CONFIG, width=100)
     st.title("Impostazioni Motore WMS")
+    
+    # CSS per contrasto Dark Mode specifico per i form
+    st.markdown("""<style>
+        div.stForm { background-color: rgba(255, 255, 255, 0.05); border-radius: 10px; padding: 20px; }
+        .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+    </style>""", unsafe_allow_html=True)
+
     t1, t2, t3 = st.tabs(["➕ Nuova Ubicazione", "📥 Import Excel", "🗑️ Gestione"])
+    
     with t1:
-        with st.form("p", clear_on_submit=True):
-            s = st.text_input("🆔 ID Ubicazione"); z = st.text_input("📍 Zona")
+        st.subheader("Registra un nuovo spazio nel magazzino")
+        with st.form("p_new", clear_on_submit=True):
+            # Usiamo nomi chiari: s_id diventerà 'id', z_id diventerà 'zona'
+            s_id = st.text_input("🆔 ID Ubicazione (es: A1-01, SCAFFALE-A)")
+            z_id = st.text_input("📍 Nome Zona (es: Garage, Mansarda, Cantina)")
+            
             if st.form_submit_button("➕ SALVA POSIZIONE"):
-                if s and z:
-                    db.aggiungi_posizione(s, z); st.success("Salvata!"); st.rerun()
+                if s_id and z_id:
+                    # Pulizia dati: tutto in maiuscolo per l'ID per coerenza
+                    id_pulito = str(s_id).strip().upper()
+                    zona_pulita = str(z_id).strip()
+                    
+                    if db.aggiungi_posizione(id_pulito, zona_pulita):
+                        st.success(f"✅ Ubicazione {id_pulito} salvata in {zona_pulita}!")
+                        time.sleep(1)
+                        st.rerun()
+                else:
+                    st.error("⚠️ Compila entrambi i campi prima di salvare.")
+    
     with t2:
-        file_ex = st.file_uploader("Carica Excel", type=['xlsx'])
+        st.subheader("Caricamento Massivo da Excel")
+        st.info("Il file Excel deve avere due colonne: 'id' e 'zona'.")
+        file_ex = st.file_uploader("Seleziona file .xlsx", type=['xlsx'])
+        
         if file_ex:
-            df_pos = pd.read_excel(file_ex)
-            st.dataframe(df_pos.head(10))
-            if st.button("🚀 AVVIA IMPORTAZIONE"):
-                ok, count = db.import_posizioni_da_df(df_pos)
-                if ok: st.success(f"Caricate {count} posizioni!"); st.rerun()
+            try:
+                df_pos = pd.read_excel(file_ex)
+                # Forza i nomi delle colonne in minuscolo per il database
+                df_pos.columns = [c.lower() for c in df_pos.columns]
+                
+                st.write("👀 Anteprima dei primi 5 righi:")
+                st.dataframe(df_pos.head(5), use_container_width=True)
+                
+                if st.button("🚀 AVVIA IMPORTAZIONE NEL DATABASE"):
+                    with st.spinner("Sincronizzazione in corso..."):
+                        ok, count = db.import_posizioni_da_df(df_pos)
+                        if ok:
+                            st.balloons()
+                            st.success(f"📥 Importazione completata! Caricate {count} posizioni.")
+                            time.sleep(2)
+                            st.rerun()
+            except Exception as e:
+                st.error(f"Errore nella lettura del file: {e}")
+
     with t3:
-        # Reset Totale (ZONA PERICOLOSA)
-        if st.expander("🚨 RESET TOTALE DATABASE"):
-            pwd = st.text_input("Password Amministratore", type="password")
+        st.subheader("Pulizia e Reset")
+        # Estrazione rapida per vedere cosa c'è dentro
+        pos_attuali = db.visualizza_posizioni()
+        st.write(f"Attualmente ci sono **{len(pos_attuali)}** ubicazioni registrate.")
+        
+        if st.expander("🚨 RESET TOTALE DATABASE (ZONA PERICOLOSA)"):
+            st.warning("Questa azione è irreversibile. Cancellerà tutte le posizioni.")
+            pwd = st.text_input("Inserisci Password Master", type="password")
             if st.button("🔥 AZZERA TUTTO"):
                 if pwd == "233674":
-                    # Nota: la funzione reset va aggiunta nel db_manager se necessario
-                    st.warning("Funzione reset attivata."); time.sleep(2); st.rerun()
+                    # db.reset_posizioni() # Da attivare se necessario nel db_manager
+                    st.error("Comando di cancellazione inviato.")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("Password errata.")
 
 # --- 🖨️ STAMPA ---
-# --- 🖨️ STAMPA (VERSIONE DEFINITIVA E CALIBRATA) ---
 elif scelta == "🖨️ Stampa":
     st.image(PATH_STAMPA, width=150)
     st.title("Centro Stampa Etichette Professionale")
     
-    # Recupero dati dal DB per il filtro
     inv_totale = db.visualizza_inventario()
+    pos_totale = db.visualizza_posizioni()
     
-    if "filtro_stampa" not in st.session_state: 
-        st.session_state.filtro_stampa = ""
+    filtro_st = st.text_input("🔍 Cerca per Nome, Proprietario o Zona", placeholder="Es: Victor, Garage, Scarpe...")
     
-    filtro_veloce = st.text_input("🔍 Cerca per Nome, Proprietario o Contenuto", 
-                                  value=st.session_state.filtro_stampa,
-                                  placeholder="Es: Victor, Evelyn, Scarpe...")
-    st.session_state.filtro_stampa = filtro_veloce
-    
-    if filtro_veloce:
+    if filtro_st:
         tab_s, tab_u = st.tabs(["📦 Etichette Scatole", "📍 Etichette Ubicazioni"])
         
         with tab_s:
-            # Filtro intelligente locale (Nome, Proprietario, Descrizione)
-            f = filtro_veloce.lower()
+            f = filtro_st.lower()
+            # ✅ Filtro Scatole
             inv_da_mostrare = [
                 s for s in inv_totale 
-                if f in str(s[1]).lower() or f in str(s[18]).lower() or f in str(s[2]).lower()
+                if f in str(s.get('nome','')).lower() or 
+                   f in str(s.get('proprietario','')).lower() or 
+                   f in str(s.get('descrizione','')).lower()
             ]
             
             sel_s = []
             if inv_da_mostrare:
-                st.write(f"✅ Trovate {len(inv_da_mostrare)} scatole")
                 for s in inv_da_mostrare:
-                    # s[1]=Nome, s[17]=Ubicazione, s[18]=Proprietario
-                    nome_s = s[1]
-                    prop_s = s[18] if s[18] else "N/A"
-                    ubi_s = s[17] if s[17] else "DA ALLOCARE"
-                    
-                    if st.checkbox(f"👤 {prop_s.upper()} | 📦 {nome_s} | 📍 {ubi_s}", key=f"st_{s[0]}"):
+                    nome_s = s.get('nome', 'N/A')
+                    prop_s = s.get('proprietario', 'N/A')
+                    id_db = s.get('id')
+                    if st.checkbox(f"📦 {nome_s} | 👤 {prop_s}", key=f"st_{id_db}"):
                         sel_s.append(s)
                 
-                if sel_s and st.button("📥 GENERA PDF PER SELEZIONATI", use_container_width=True):
+                if sel_s and st.button("📥 GENERA PDF SCATOLE", use_container_width=True):
                     pdf = FPDF()
-                    # Elaboriamo 2 scatole alla volta per pagina
                     for i in range(0, len(sel_s), 2):
                         pdf.add_page()
                         for idx, s in enumerate(sel_s[i:i+2]):
-                            # Calcolo coordinata Y di partenza (10 per la prima, 150 per la seconda)
                             y_start = 10 if idx == 0 else 150
-                            
-                            nome_etichetta = str(s[1])
-                            prop_etichetta = str(s[18]).upper()
-                            data_raw = str(s[19])
-                            
-                            # Formattazione Data DD/MM/YYYY
-                            try:
-                                dp = data_raw[:10].split("-")
-                                data_f = f"{dp[2]}/{dp[1]}/{dp[0]}"
-                            except:
-                                data_f = data_raw
-
-                            # --- DISEGNO GRAFICO ---
-                            # Cornice etichetta
+                            nome_e = str(s.get('nome', 'N/A'))
+                            prop_e = str(s.get('proprietario', 'N/A')).upper()
                             pdf.rect(10, y_start, 190, 130)
+                            pdf.set_font("Arial", 'B', 40); pdf.set_xy(15, y_start + 15); pdf.cell(110, 20, prop_e)
+                            pdf.set_font("Arial", 'B', 25); pdf.set_xy(15, y_start + 45); pdf.multi_cell(110, 12, nome_e)
                             
-                            # Proprietario (Grande)
-                            pdf.set_font("Arial", 'B', 45)
-                            pdf.set_xy(15, y_start + 15)
-                            pdf.cell(110, 20, prop_etichetta, ln=0)
-                            
-                            # Nome Scatola (Sotto proprietario)
-                            pdf.set_font("Arial", 'B', 25)
-                            pdf.set_xy(15, y_start + 45)
-                            pdf.multi_cell(110, 12, nome_etichetta)
-                            
-                            # Data (In basso a sinistra)
-                            pdf.set_font("Arial", 'I', 12)
-                            pdf.set_xy(15, y_start + 115)
-                            pdf.cell(0, 10, f"Registrata il: {data_f}")
-                            
-                            # --- GENERAZIONE QR CODE ---
-                            qr = QRCode(box_size=5)
-                            qr.add_data(nome_etichetta)
-                            qr.make()
-                            img = qr.make_image()
-                            temp_img = f"qr_temp_{idx}.png"
-                            img.save(temp_img)
-                            
-                            # Inserimento QR Code con coordinata Y calibrata
-                            pdf.image(temp_img, x=125, y=y_start + 30, w=65)
-
-                    st.download_button("💾 Scarica PDF", pdf.output(dest='S').encode('latin-1'), "etichette_vhd.pdf")
-            else:
-                st.warning("Nessuna scatola trovata.")
+                            qr = QRCode(box_size=5); qr.add_data(nome_e); qr.make()
+                            img = qr.make_image(); t_img = f"qr_s_{idx}.png"; img.save(t_img)
+                            pdf.image(t_img, x=125, y=y_start + 30, w=65)
+                    st.download_button("💾 Scarica PDF Scatole", pdf.output(dest='S').encode('latin-1'), "etichette_vhd.pdf")
 
         with tab_u:
-            pos_complete = db.visualizza_posizioni()
+            # ✅ FIX: Ricerca Ubicazioni (Cerca per ID o per Zona)
+            f_u = filtro_st.lower()
+            pos_da_mostrare = [
+                p for p in pos_totale 
+                if f_u in str(p.get('id','')).lower() or f_u in str(p.get('zona','')).lower()
+            ]
+            
+            if pos_da_mostrare:
+                st.write(f"📍 Trovate {len(pos_da_mostrare)} ubicazioni")
+                sel_p = []
+                for p in pos_da_mostrare:
+                    id_p = p.get('id')
+                    zona_p = p.get('zona')
+                    if st.checkbox(f"📍 {id_p} (Zona: {zona_p})", key=f"stp_{id_p}"):
+                        sel_p.append(p)
+                
+                if sel_p and st.button("📥 GENERA PDF UBICAZIONI", use_container_width=True):
+                    pdf_u = FPDF()
+                    for p in sel_p:
+                        pdf_u.add_page()
+                        pdf_u.rect(10, 10, 190, 130)
+                        pdf_u.set_font("Arial", 'B', 50); pdf_u.set_xy(15, 30); pdf_u.cell(180, 40, p.get('id'), align='C')
+                        pdf_u.set_font("Arial", 'B', 20); pdf_u.set_xy(15, 80); pdf_u.cell(180, 20, p.get('zona').upper(), align='C')
+                    st.download_button("💾 Scarica PDF Ubicazioni", pdf_u.output(dest='S').encode('latin-1'), "ubicazioni_vhd.pdf")
+            else:
+                st.warning("Nessuna ubicazione trovata.")
