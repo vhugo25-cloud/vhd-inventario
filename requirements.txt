@@ -2,8 +2,8 @@ streamlit
 pandas
 supabase
 cloudinary
-python-dotenv
 qrcode
-reportlab
 streamlit-qrcode-scanner
+fpdf
+xlsxwriter
 openpyxl
