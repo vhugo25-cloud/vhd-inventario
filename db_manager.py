@@ -18,19 +18,20 @@ class InventarioDB:
 
     def visualizza_inventario(self):
         try:
-            res = self.supabase.table("inventario").select("*").execute()
+            res = self.supabase.table("inventario").select("*").order("id").execute()
             return res.data
         except:
             return []
 
     def visualizza_posizioni(self):
         try:
-            res = self.supabase.table("posizioni").select("*").execute()
+            res = self.supabase.table("posizioni").select("*").order("zona").execute()
             return res.data
         except:
             return []
 
     def aggiungi_scatola(self, **kwargs):
+        """Aggiunge una nuova scatola con tutte le 4 foto e i testi dei livelli"""
         try:
             dati = {
                 "nome": kwargs.get("nome"),
@@ -48,10 +49,12 @@ class InventarioDB:
             }
             self.supabase.table("inventario").insert(dati).execute()
             return True
-        except:
+        except Exception as e:
+            st.error(f"Errore inserimento: {e}")
             return False
 
-    def aggiorna_dati_scatola(self, id_scatola, nome, desc, prop, ct, mt, bt, url_foto=None):
+    def aggiorna_dati_scatola(self, id_scatola, nome, desc, prop, ct, mt, bt, f_main=None, f_cima=None, f_cent=None, f_fond=None):
+        """Aggiorna dati e testi, e le foto solo se ne vengono inviate di nuove"""
         try:
             dati = {
                 "nome": nome,
@@ -61,11 +64,17 @@ class InventarioDB:
                 "centro_testo": mt,
                 "fondo_testo": bt
             }
-            if url_foto:
-                dati["foto_main"] = url_foto
+            
+            # Update condizionale delle immagini (solo se fornite)
+            if f_main: dati["foto_main"] = f_main
+            if f_cima: dati["cima_foto"] = f_cima
+            if f_cent: dati["centro_foto"] = f_cent
+            if f_fond: dati["fondo_foto"] = f_fond
+                
             self.supabase.table("inventario").update(dati).eq("id", id_scatola).execute()
             return True
-        except:
+        except Exception as e:
+            st.error(f"Errore aggiornamento: {e}")
             return False
 
     def aggiorna_posizione_scatola(self, id_scatola, zona, ubi):
@@ -92,25 +101,16 @@ class InventarioDB:
 
     def aggiungi_posizione(self, id_u, zona):
         try:
-            # Upsert anche per l'aggiunta singola (evita errori se esiste già)
             self.supabase.table("posizioni").upsert({"id_ubicazione": id_u, "zona": zona}).execute()
             return True
         except:
             return False
 
     def import_posizioni_da_df(self, df):
-        """
-        Importa ubicazioni usando UPSERT: 
-        se l'ID esiste già, lo aggiorna invece di bloccarsi.
-        """
         try:
-            # 1. Pulizia nomi colonne
             df.columns = [str(c).lower().strip() for c in df.columns]
-            
-            # 2. Rinominazione per id_ubicazione (il tuo campo SQL)
             df = df.rename(columns={'id scaffale': 'id_ubicazione', 'id': 'id_ubicazione', 'zona': 'zona'})
             
-            # 3. Preparazione lista pulita
             lista_finale = []
             for _, r in df.iterrows():
                 lista_finale.append({
@@ -118,7 +118,6 @@ class InventarioDB:
                     "zona": str(r['zona']).strip()
                 })
             
-            # 4. UPSERT Massivo (Ignora o aggiorna duplicati)
             self.supabase.table("posizioni").upsert(lista_finale, on_conflict="id_ubicazione").execute()
             return True, len(lista_finale)
         except Exception as e:
