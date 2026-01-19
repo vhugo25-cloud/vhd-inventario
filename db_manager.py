@@ -1,10 +1,21 @@
 import pandas as pd
 from supabase import create_client, Client
 import streamlit as st
+import cloudinary
+import cloudinary.uploader
+
+# --- CONFIGURAZIONE CLOUDINARY ---
+# Prende le credenziali dai secrets di Streamlit Cloud
+cloudinary.config(
+    cloud_name = st.secrets["CLOUDINARY_CLOUD_NAME"],
+    api_key = st.secrets["CLOUDINARY_API_KEY"],
+    api_secret = st.secrets["CLOUDINARY_API_SECRET"],
+    secure = True
+)
 
 class InventarioDB:
     def __init__(self):
-        # Carica le credenziali dai secrets di Streamlit
+        # Carica le credenziali Supabase dai secrets di Streamlit
         self.url = st.secrets["SUPABASE_URL"]
         self.key = st.secrets["SUPABASE_KEY"]
         self.supabase: Client = create_client(self.url, self.key)
@@ -30,8 +41,26 @@ class InventarioDB:
         except:
             return []
 
+    def upload_foto(self, file, nome_scatola, posizione):
+        """Carica una foto su Cloudinary (main, cima, centro, fondo)"""
+        try:
+            if file is None:
+                return None
+            
+            folder_path = f"vhd_wms/{nome_scatola}"
+            upload_result = cloudinary.uploader.upload(
+                file,
+                folder=folder_path,
+                public_id=f"{nome_scatola}_{posizione}",
+                overwrite=True,
+                resource_type="image"
+            )
+            return upload_result.get('secure_url')
+        except Exception as e:
+            st.error(f"Errore caricamento Cloudinary ({posizione}): {e}")
+            return None
+
     def aggiungi_scatola(self, **kwargs):
-        """Aggiunge una nuova scatola con tutte le 4 foto e i testi dei livelli"""
         try:
             dati = {
                 "nome": kwargs.get("nome"),
@@ -54,7 +83,6 @@ class InventarioDB:
             return False
 
     def aggiorna_dati_scatola(self, id_scatola, nome, desc, prop, ct, mt, bt, f_main=None, f_cima=None, f_cent=None, f_fond=None):
-        """Aggiorna dati e testi, e le foto solo se ne vengono inviate di nuove"""
         try:
             dati = {
                 "nome": nome,
@@ -64,8 +92,6 @@ class InventarioDB:
                 "centro_testo": mt,
                 "fondo_testo": bt
             }
-            
-            # Update condizionale delle immagini (solo se fornite)
             if f_main: dati["foto_main"] = f_main
             if f_cima: dati["cima_foto"] = f_cima
             if f_cent: dati["centro_foto"] = f_cent
@@ -110,16 +136,29 @@ class InventarioDB:
         try:
             df.columns = [str(c).lower().strip() for c in df.columns]
             df = df.rename(columns={'id scaffale': 'id_ubicazione', 'id': 'id_ubicazione', 'zona': 'zona'})
-            
             lista_finale = []
             for _, r in df.iterrows():
                 lista_finale.append({
                     "id_ubicazione": str(r['id_ubicazione']).strip().upper(),
                     "zona": str(r['zona']).strip()
                 })
-            
             self.supabase.table("posizioni").upsert(lista_finale, on_conflict="id_ubicazione").execute()
             return True, len(lista_finale)
         except Exception as e:
             st.error(f"Errore tecnico import: {e}")
             return False, 0
+
+    def reset_totale_inventario(self):
+        try:
+            # Elimina tutti i record dove id non è nullo (cancella tutto)
+            self.supabase.table("inventario").delete().neq("id", -1).execute()
+            return True
+        except:
+            return False
+
+    def reset_totale_posizioni(self):
+        try:
+            self.supabase.table("posizioni").delete().neq("id_ubicazione", "NONE_XYZ").execute()
+            return True
+        except:
+            return False

@@ -4,7 +4,10 @@ supabase
 cloudinary
 python-dotenv
 qrcode
-streamlit-qrcode-scanner
 fpdf
 xlsxwriter
 openpyxl
+opencv-python-headless
+numpy
+Pillow
+streamlit-qrcode-scanner

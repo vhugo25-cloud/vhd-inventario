@@ -447,24 +447,26 @@ elif scelta == "📝 Modifica Scatola":
         st.info("🔍 Non ci sono scatole registrate da poter modificare.")
 
 
-
-
-
- # --- 📸 SCANNER QR ---
+# --- 📸 SCANNER QR (Ritorno alla versione VELOCE) ---
 elif scelta == "📸 Scanner QR":
     st.title("Scanner Intelligente Hernandez")
-    st.info("💡 Punta la fotocamera del Surface verso il QR Code della scatola.")
+    st.info("💡 Inquadra il QR Code per il riconoscimento immediato.")
+
+    # Importiamo il componente che ti piaceva
+    from streamlit_qrcode_scanner import qrcode_scanner
+
+    # Usiamo una chiave che cambia ogni volta per "resettare" il componente e non farlo crashare
+    import time
+    chiave_dinamica = f"scanner_{int(time.time() / 10)}" # Cambia ogni 10 secondi
     
-    # FIX TELECAMERA: Cambiamo leggermente la chiave ogni volta che entri nella sezione
-    # Questo forza il browser a richiedere l'accesso alla webcam
-    codice_scansionato = qrcode_scanner(key="scanner_vhd_ Hernandez_2026")
-    
+    codice_scansionato = qrcode_scanner(key=chiave_dinamica)
+
     if codice_scansionato:
         st.success(f"✅ Codice rilevato: {codice_scansionato}")
         inv_data = db.visualizza_inventario()
         
-        # Ricerca della scatola (con gestione sicura del testo)
-        risultato = [s for s in inv_data if str(s.get('nome')).strip().upper() == str(codice_scansionato).strip().upper()]
+        # Ricerca della scatola
+        risultato = [s for s in inv_data if str(s.get('nome', '')).strip().upper() == str(codice_scansionato).strip().upper()]
         
         if risultato:
             r = risultato[0]
@@ -473,21 +475,17 @@ elif scelta == "📸 Scanner QR":
             
             col_imm, col_info = st.columns([1, 1.5])
             with col_imm:
-                st.image(r.get('foto_main') or NO_PHOTO, use_container_width=True, border=True)
+                # IMPORTANTE: Qui abbiamo tolto border=True che faceva crashare tutto
+                st.image(r.get('foto_main') or NO_PHOTO, use_container_width=True)
             
             with col_info:
-                st.markdown(f"**📍 Ubicazione:** `{r.get('zon')} - {r.get('ubi')}`")
-                st.markdown(f"**👤 Proprietario:** {r.get('proprietario')}")
-                st.info(f"**📝 Descrizione:**\n{r.get('descrizione')}")
-            
-            st.write("### 🔍 Dettaglio Contenuto")
-            l1, l2, l3 = st.columns(3)
-            l1.image(r.get('cima_foto') or NO_PHOTO, caption=f"🔼 {r.get('cima_testo', 'Cima')}")
-            l2.image(r.get('centro_foto') or NO_PHOTO, caption=f"↔️ {r.get('centro_testo', 'Centro')}")
-            l3.image(r.get('fondo_foto') or NO_PHOTO, caption=f"🔽 {r.get('fondo_testo', 'Fondo')}")
+                st.markdown(f"**📍 Ubicazione:** `{r.get('zon', 'N/D')} - {r.get('ubi', 'N/D')}`")
+                st.markdown(f"**👤 Proprietario:** {r.get('proprietario', 'N/D')}")
+                st.info(f"**📝 Descrizione:**\n{r.get('descrizione', 'Nessuna descrizione')}")
         else:
-            st.error(f"❌ La scatola '{codice_scansionato}' non esiste nel database.")
-
+            st.error(f"❌ La scatola '{codice_scansionato}' non esiste.")
+            
+ 
 
 # --- 🔄 ALLOCA/SPOSTA ---
 # --- 🔄 ALLOCA/SPOSTA ---
