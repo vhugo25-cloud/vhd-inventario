@@ -448,42 +448,47 @@ elif scelta == "📝 Modifica Scatola":
 
 
 # --- 📸 SCANNER QR (Ritorno alla versione VELOCE) ---
+# --- 📸 SCANNER QR VELOCE (Versione Stabile) ---
 elif scelta == "📸 Scanner QR":
     st.title("Scanner Intelligente Hernandez")
     st.info("💡 Inquadra il QR Code per il riconoscimento immediato.")
 
-    # Importiamo il componente che ti piaceva
     from streamlit_qrcode_scanner import qrcode_scanner
 
-    # Usiamo una chiave che cambia ogni volta per "resettare" il componente e non farlo crashare
-    import time
-    chiave_dinamica = f"scanner_{int(time.time() / 10)}" # Cambia ogni 10 secondi
-    
-    codice_scansionato = qrcode_scanner(key=chiave_dinamica)
+    # Usiamo una chiave fissa. È più stabile per catturare il risultato.
+    codice_scansionato = qrcode_scanner(key="scanner_fisso_hernandez")
 
     if codice_scansionato:
-        st.success(f"✅ Codice rilevato: {codice_scansionato}")
-        inv_data = db.visualizza_inventario()
+        # Pulizia del codice ricevuto
+        codice_pulito = str(codice_scansionato).strip().upper()
         
-        # Ricerca della scatola
-        risultato = [s for s in inv_data if str(s.get('nome', '')).strip().upper() == str(codice_scansionato).strip().upper()]
+        # Cerchiamo nel database
+        inv_data = db.visualizza_inventario()
+        risultato = [s for s in inv_data if str(s.get('nome', '')).strip().upper() == codice_pulito]
         
         if risultato:
             r = risultato[0]
+            st.success(f"✅ Scatola trovata: {codice_pulito}")
             st.markdown("---")
-            st.subheader(f"📦 Scatola: {r.get('nome')}")
             
             col_imm, col_info = st.columns([1, 1.5])
             with col_imm:
-                # IMPORTANTE: Qui abbiamo tolto border=True che faceva crashare tutto
+                # Carichiamo la foto (sen r.get('foto_main') or NO_PHOTO, use_container_width=True)
                 st.image(r.get('foto_main') or NO_PHOTO, use_container_width=True)
             
             with col_info:
+                st.subheader(f"📦 {r.get('nome')}")
                 st.markdown(f"**📍 Ubicazione:** `{r.get('zon', 'N/D')} - {r.get('ubi', 'N/D')}`")
                 st.markdown(f"**👤 Proprietario:** {r.get('proprietario', 'N/D')}")
                 st.info(f"**📝 Descrizione:**\n{r.get('descrizione', 'Nessuna descrizione')}")
+            
+            # Tasto per resettare e scansionare ancora
+            if st.button("🔄 Nuova Scansione"):
+                st.rerun()
         else:
-            st.error(f"❌ La scatola '{codice_scansionato}' non esiste.")
+            st.error(f"❌ Codice '{codice_pulito}' non trovato nel database.")
+            if st.button("Riprova"):
+                st.rerun()
             
  
 
