@@ -69,31 +69,53 @@ except:
     pass
 
 # --- ESTETICA PROFESSIONALE (ALTO CONTRASTO CIANO NEON) ---
+# --- ESTETICA PROFESSIONALE (FORZA TEMA CHIARO & CONTRASTO) ---
 st.markdown("""
     <style>
-    @media (prefers-color-scheme: dark) {
-        .stApp { background-color: #0E1117; }
-        h1, h2, h3, p, span, label, .stMarkdown { color: #FFFFFF !important; }
-        [data-testid="stMetric"] { 
-            background-color: #161B22 !important; 
-            border: 1px solid #00FBFF !important;
-            box-shadow: 0px 0px 15px rgba(0, 251, 255, 0.1) !important;
-        }
-        [data-testid="stMetricLabel"] { color: #ADB5BD !important; }
-        [data-testid="stMetricValue"] { color: #00FBFF !important; }
+    /* 1. Forza lo sfondo bianco su tutta l'app, ignorando il dark mode del telefono */
+    .stApp {
+        background-color: white !important;
     }
-    @media (prefers-color-scheme: light) {
-        h1, h2, h3, p, span, label, .stMarkdown { color: #001f3f !important; }
-        [data-testid="stMetric"] { 
-            background-color: #ffffff !important; 
-            border-left: 5px solid #007bff !important;
-        }
+
+    /* 2. Forza tutti i testi a un blu scuro/nero molto leggibile */
+    h1, h2, h3, p, span, label, .stMarkdown, [data-testid="stMetricLabel"] {
+        color: #001f3f !important;
     }
-    [data-testid="stSidebar"] { background-color: #001f3f !important; }
-    [data-testid="stSidebar"] * { color: white !important; font-size: 1.05rem; }
-    .stExpander { border: 1px solid #007bff !important; border-radius: 10px; }
-    img { border-radius: 15px; margin-bottom: 15px; border: 1px solid rgba(0,251,255,0.2); }
-    div[style*="background-color"] { border: 1px solid rgba(255,255,255,0.1) !important; }
+
+    /* 3. Stile delle card (Metriche) */
+    [data-testid="stMetric"] { 
+        background-color: #f8f9fa !important; 
+        border-left: 5px solid #007bff !important;
+        border-radius: 10px;
+        padding: 10px;
+    }
+    
+    /* 4. Valore delle metriche in blu brillante */
+    [data-testid="stMetricValue"] {
+        color: #007bff !important;
+    }
+
+    /* 5. Sidebar (Menu laterale) sempre blu scuro Hernandez */
+    [data-testid="stSidebar"] {
+        background-color: #001f3f !important;
+    }
+    
+    [data-testid="stSidebar"] * {
+        color: white !important;
+    }
+
+    /* 6. Arrotondamento immagini */
+    img {
+        border-radius: 15px;
+        border: 1px solid #dee2e6;
+    }
+
+    /* 7. Expander (Dettagli) */
+    .stExpander {
+        border: 1px solid #007bff !important;
+        border-radius: 10px;
+        background-color: #ffffff !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
