@@ -123,6 +123,17 @@ st.markdown("""
 db = db_manager.InventarioDB()
 utenti = ["Victor", "Evelyn", "Daniel", "Carly", "Rebby"]
 
+# Dizionario Emoji per i proprietari
+EMOJI_PROPRIETARI = {
+    "Victor": "👨🏻‍💻",
+    "Evelyn": "👩🏻‍💼",
+    "Daniel": "👦🏻",
+    "Carly": "👧🏻",
+    "Rebby": "👶🏻"
+}
+
+
+
 # --- GESTIONE MENU UNICO (PULITO) ---
 # Usiamo solo questo, così i loghi funzionano sempre
 scelta = st.sidebar.selectbox("Inventario Casa Hernandez", list(LOGHI.keys()))
@@ -145,12 +156,14 @@ def upload_foto(file, nome, tipo):
 # --- 🏠 HOME ---
 # --- 🏠 HOME ---
 if scelta == "🏠 Home":
-    st.title("Inventario Casa Hernandez")
+    st.title("📊 Inventario Casa Hernandez")
     
     # --- RECUPERO DATI ---
     inv_data = db.visualizza_inventario()
     pos = db.visualizza_posizioni()
+    df = pd.DataFrame(inv_data) if inv_data else pd.DataFrame()
 
+    # --- BOTTONE SVEGLIA DB (In alto a destra) ---
     col_testo, col_bottone = st.columns([2, 1])
     with col_bottone:
         if st.button("🔗 Sistema offline?", type="secondary", use_container_width=True):
@@ -160,85 +173,89 @@ if scelta == "🏠 Home":
                     st.toast("Connesso!", icon="✅")
                     st.rerun()
 
-    # --- 📖 GLOSSARIO E CONSIGLI (Stile Giallo Oro) ---
-    st.markdown("""
-        <style>
-        .glossario-box {
-            background-color: #FFD700; 
-            padding: 20px; 
-            border-radius: 12px; 
-            border-left: 8px solid #FFA500;
-            margin-bottom: 25px;
-            box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
-        }
-        .glossario-box h3, .glossario-box p, .glossario-box li {
-            color: #1a1a1a !important; /* Testo scuro per massimo contrasto su giallo */
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        .glossario-box b { color: #000 !important; }
-        </style>
-    """, unsafe_allow_html=True)
-
-    with st.expander("📚 GUIDA RAPIDA E CONSIGLI PER LA FAMIGLIA (Leggi qui!)"):
-        st.markdown('<div class="glossario-box">', unsafe_allow_html=True)
-        st.markdown("""
-        ### 💡 Consigli del Capo Magazziniere
-        
-        * **🔍 Cerca ed Elimina:** Quando avremo centinaia di scatole, non cercarle a occhio! Usa il filtro **Proprietario** (scrivi Victor, Evelyn, ecc.) per vedere subito solo le tue cose. 
-        * **🖨️ Stampa Etichette:** **Consiglio risparmio:** Non stampare una scatola alla volta. Aspetta di averne almeno due e stampale insieme per risparmiare carta e adesivi!
-        * **🖼️ Livelli Interni:** Fai sempre le foto di **Cima, Centro e Fondo**. Ti serviranno per sapere cosa c'è sotto senza dover tirare fuori tutto fisicamente.
-        * **📍 Allocazione:** Se vedi scatole in "⚠️ Da Allocare", significa che sono "nomadi". Trovagli un posto fisso e registralo subito!
-        * **🔄 Regola Hernandez:** Se sposti una scatola fisicamente, il tuo pollice deve spostarla contemporaneamente nell'App. Altrimenti, per il magazzino, è persa!
-        """)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # --- METRICHE E EXPORT ---
+    # --- 1. METRICHE (In alto) ---
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("📦 Scatole", len(inv_data))
+    tot_scatole = len(inv_data)
+    c1.metric("📦 Scatole", tot_scatole)
     
     zone_uniche = len(set([p.get('zona') for p in pos if p.get('zona')])) if pos else 0
     c2.metric("📍 Zone", zone_uniche)
     c3.metric("📌 Ubicazioni", len(pos))
 
-    count_da_allocare = len([s for s in inv_data if not s.get('ubi') or str(s.get('ubi')).strip().upper() in ["", "NON ALLOCATA"]]) if inv_data else 0
-    c4.metric("⚠️ Da Allocare", count_da_allocare)
+    count_da_allocare = 0
+    if inv_data:
+        count_da_allocare = len([s for s in inv_data if not s.get('ubi') or str(s.get('ubi')).strip().upper() in ["", "NON ALLOCATA"]])
     
-    # --- TASTO EXPORT EXCEL ---
+    c4.metric("🚚 In Giro", count_da_allocare, delta=f"{count_da_allocare} da sistemare", delta_color="inverse")
+
+    st.write("---")
+
+    # --- 2. ULTIME SCATOLE REGISTRATE (Seconda posizione) ---
+    if inv_data:
+        st.subheader("🕒 Ultime Scatole Registrate")
+        mappa_nomi = {"nome": "Nome", "zon": "Zona", "ubi": "Ubicazione", "proprietario": "Proprietario"}
+        cols_esistenti = [c for c in mappa_nomi.keys() if c in df.columns]
+        st.dataframe(df[cols_esistenti].tail(5).rename(columns=mappa_nomi), use_container_width=True, hide_index=True)
+        st.write("---")
+
+    # --- 3. GRAFICA (COLORI AZZURRO E VERDE) ---
+    if not df.empty:
+        col_g1, col_g2 = st.columns(2)
+        
+        with col_g1:
+            st.subheader("👥 Carico Proprietari")
+            if 'proprietario' in df.columns:
+                prop_counts = df['proprietario'].value_counts()
+                # Colore Azzurro come richiesto
+                st.bar_chart(prop_counts, color="#00BFFF") 
+                st.caption("Distribuzione del carico per ogni proprietario.")
+        
+        with col_g2:
+            st.subheader("📍 Saturazione Zone")
+            if 'zon' in df.columns:
+                zona_counts = df['zon'].value_counts()
+                # Colore Verde come richiesto
+                st.bar_chart(zona_counts, color="#28A745")
+                st.caption("Occupazione delle diverse zone del magazzino.")
+        st.write("---")
+
+    # --- 4. IL RESTO (Glossario, Export e Mappa) ---
+    
+    # Glossario e Consigli
+    with st.expander("📚 GUIDA RAPIDA E CONSIGLI"):
+        st.markdown("""
+            <div style="background-color: #FFD700; padding: 20px; border-radius: 12px; border-left: 8px solid #FFA500;">
+                <h3 style="color: #1a1a1a;">💡 Consigli del Capo Magazziniere</h3>
+                <p style="color: #1a1a1a;">• Usa lo <b>Scanner QR</b> per velocizzare l'allocazione domani!</p>
+                <p style="color: #1a1a1a;">• Se vedi quadratini <b>Rossi</b> nella mappa, significa che lo scaffale è occupato.</p>
+                <p style="color: #1a1a1a;">• Mantieni l'app aggiornata per non perdere la tracciabilità.</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+    # Tasto Export Excel
     if inv_data:
         import io
-        df_exp = pd.DataFrame(inv_data)
-        col_utili = ['id', 'nome', 'descrizione', 'proprietario', 'zon', 'ubi', 'cima_testo', 'centro_testo', 'fondo_testo']
-        df_exp = df_exp[[c for c in col_utili if c in df_exp.columns]]
-        
+        df_exp = df.copy()
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-            df_exp.to_excel(writer, index=False, sheet_name='Inventario')
+            df_exp.to_excel(writer, index=False)
         
+        st.write("")
         st.download_button(
             label="📥 Esporta Inventario Completo (Excel)",
             data=buffer,
             file_name="inventario_hernandez.xlsx",
             mime="application/vnd.ms-excel",
-            use_container_width=True,
-            help="Scarica la lista per lavorare offline o fare un controllo generale"
+            use_container_width=True
         )
 
+    # Mappa Stato Scaffalatura con TOOLTIP RIPRISTINATO
     st.write("---")
-    
-    if inv_data:
-        df = pd.DataFrame(inv_data)
-        st.subheader("📊 Ultime Scatole Registrate")
-        mappa_nomi = {"nome": "Nome", "zon": "Zona", "ubi": "Ubicazione", "proprietario": "Proprietario"}
-        cols_esistenti = [c for c in mappa_nomi.keys() if c in df.columns]
-        st.dataframe(df[cols_esistenti].tail(5).rename(columns=mappa_nomi), use_container_width=True, hide_index=True)
-    
-    st.write("---")
-    
-    # --- 🗺️ MAPPA OCCUPAZIONE MAGAZZINO ---
-    st.subheader("🗺️ Mappa Occupazione Magazzino")
+    st.subheader("🗺️ Mappa Stato Occupazione Magazzino")
     if pos:
+        # Mappa Ubicazione -> Nome Contenuto
         mappa_occupazione = {
-            str(s.get('ubi', '')).strip().upper(): s.get('nome') 
+            str(s.get('ubi', '')).strip().upper(): s.get('nome', 'Senza Nome') 
             for s in inv_data if s.get('ubi') and str(s.get('ubi')).upper() != "NON ALLOCATA"
         }
         
@@ -247,16 +264,17 @@ if scelta == "🏠 Home":
             batch = pos[i:i + cols_per_row]
             cols = st.columns(cols_per_row)
             for j, p in enumerate(batch):
-                id_u_raw = p.get('id_ubicazione') or p.get('id') or p.get('ID') or p.get('id_u')
+                id_u_raw = p.get('id_ubicazione') or p.get('id')
                 id_u = str(id_u_raw).strip().upper() if id_u_raw else "N/D"
                 
                 piena = id_u in mappa_occupazione
                 nome_contenuto = mappa_occupazione.get(id_u, "Libera")
                 
-                color = "#FF4B4B" if piena else "#28A745"
+                color = "#FF4B4B" if piena else "#28A745" # Rosso se piena, Verde se libera
                 icon = "📦" if piena else "✅"
                 
                 with cols[j]:
+                    # Tooltip ripristinato tramite l'attributo 'title'
                     st.markdown(f'''
                         <div title="Ubicazione: {id_u}&#10;Contenuto: {nome_contenuto}" 
                              style="background-color:{color}; color:white !important; padding:5px; 
@@ -266,14 +284,13 @@ if scelta == "🏠 Home":
                         <span style="color: white !important; font-weight: bold; font-size: 7px;">{id_u}</span>
                         </div>''', unsafe_allow_html=True)
     else:
-        st.warning("⚠️ Nessuna ubicazione trovata. Vai in 'Configura' per creare la mappa.")
+        st.warning("⚠️ Nessuna ubicazione trovata. Configura le posizioni nel database.")
         
-
 
 
                     
 # --- 🔍 CERCA ED ELIMINA ---
-# --- 🔍 CERCA ED ELIMINA ---
+# --- 🔍 CERCA ED ELIMINA (Versione con Emoji Dinamiche) ---
 elif scelta == "🔍 Cerca ed Elimina":
     st.title("Ricerca e Gestione")
     
@@ -293,12 +310,17 @@ elif scelta == "🔍 Cerca ed Elimina":
             prop = r.get('proprietario', 'N/D')
             data_reg = r.get('data_inserimento', 'Data non disp.')
             
+            # --- LOGICA EMOJI PERSONALIZZATA ---
+            # Cerchiamo l'emoji nel dizionario, se non esiste usiamo 👤
+            emoji_p = EMOJI_PROPRIETARI.get(prop, "👤")
+            
             f_main = r.get('foto_main') if r.get('foto_main') else NO_PHOTO
             f_cima = r.get('cima_foto') if r.get('cima_foto') else NO_PHOTO
             f_cent = r.get('centro_foto') if r.get('centro_foto') else NO_PHOTO
             f_fond = r.get('fondo_foto') if r.get('fondo_foto') else NO_PHOTO
 
-            with st.expander(f"📦 {nome} | 📍 {zona} - {ubi} | 👤 {prop}"):
+            # Titolo dell'expander con l'emoji corretta
+            with st.expander(f"📦 {nome} | 📍 {zona} - {ubi} | {emoji_p} {prop}"):
                 st.markdown(f"<p style='color: #ADB5BD; font-size: 0.8rem;'>📅 Registrata il: {data_reg}</p>", unsafe_allow_html=True)
                 
                 col1, col2 = st.columns([1, 2])
@@ -307,6 +329,8 @@ elif scelta == "🔍 Cerca ed Elimina":
                 
                 with col2:
                     st.write(f"**📝 Descrizione:** {desc}")
+                    # Mostriamo il proprietario con l'emoji anche nei dettagli
+                    st.write(f"**{emoji_p} Proprietario:** {prop}")
                     st.markdown("---")
                     st.subheader("🔍 Contenuto Interno")
                     
@@ -329,6 +353,7 @@ elif scelta == "🔍 Cerca ed Elimina":
                         st.rerun()
     else:
         st.info("Nessuna scatola trovata.")
+
 
 # --- ➕ NUOVA SCATOLA ---
 # --- ➕ NUOVA SCATOLA ---
@@ -470,7 +495,7 @@ elif scelta == "📝 Modifica Scatola":
 
 
 # --- 📸 SCANNER QR (Ritorno alla versione VELOCE) ---
-# --- 📸 SCANNER QR VELOCE (Versione Stabile) ---
+# --- 📸 SCANNER QR VELOCE (Versione Stabile con Emoji) ---
 elif scelta == "📸 Scanner QR":
     st.title("Scanner Intelligente Hernandez")
     st.info("💡 Inquadra il QR Code per il riconoscimento immediato.")
@@ -490,18 +515,23 @@ elif scelta == "📸 Scanner QR":
         
         if risultato:
             r = risultato[0]
+            
+            # --- LOGICA EMOJI PERSONALIZZATA ---
+            prop_nome = r.get('proprietario', 'N/D')
+            emoji_p = EMOJI_PROPRIETARI.get(prop_nome, "👤")
+            
             st.success(f"✅ Scatola trovata: {codice_pulito}")
             st.markdown("---")
             
             col_imm, col_info = st.columns([1, 1.5])
             with col_imm:
-                # Carichiamo la foto (sen r.get('foto_main') or NO_PHOTO, use_container_width=True)
                 st.image(r.get('foto_main') or NO_PHOTO, use_container_width=True)
             
             with col_info:
                 st.subheader(f"📦 {r.get('nome')}")
                 st.markdown(f"**📍 Ubicazione:** `{r.get('zon', 'N/D')} - {r.get('ubi', 'N/D')}`")
-                st.markdown(f"**👤 Proprietario:** {r.get('proprietario', 'N/D')}")
+                # Visualizzazione del proprietario con la sua emoji specifica
+                st.markdown(f"**{emoji_p} Proprietario:** {prop_nome}")
                 st.info(f"**📝 Descrizione:**\n{r.get('descrizione', 'Nessuna descrizione')}")
             
             # Tasto per resettare e scansionare ancora
@@ -515,59 +545,92 @@ elif scelta == "📸 Scanner QR":
  
 
 # --- 🔄 ALLOCA/SPOSTA ---
-# --- 🔄 ALLOCA/SPOSTA ---
+# --- 🔄 ALLOCA/SPOSTA (Versione Smart Scan) ---
 elif scelta == "🔄 Alloca/Sposta":
-    st.title("Movimentazione e Allocazione")
+    st.title("Movimentazione Intelligente")
+    from streamlit_qrcode_scanner import qrcode_scanner
     
     # Recupero dati
     inv = db.visualizza_inventario()
     pos = db.visualizza_posizioni()
     
     if inv and pos:
-        st.info("💡 Seleziona una scatola e la sua nuova destinazione nel magazzino.")
-        
-        # ✅ Selezione Scatola con ID chiaro
+        st.info("💡 Puoi selezionare Scatola e Destinazione manualmente o usando il QR Code.")
+
+        # --- 📦 FASE 1: SELEZIONE SCATOLA ---
+        st.subheader("1. Seleziona la Scatola")
         s_options = {f"{s.get('id')} | {s.get('nome')}": s for s in inv}
-        s_sel_key = st.selectbox("📦 Scatola da spostare", options=list(s_options.keys()), 
-                                 help="Mostra ID, Nome e posizione attuale")
         
-        # ✅ Selezione Posizione
-        p_list = []
-        for p in pos:
-            codice_ubi = p.get('id_ubicazione') or p.get('id') or "N/D"
-            nome_zona = p.get('zona', 'N/D')
-            p_list.append(f"{nome_zona} | {codice_ubi}")
-            
-        p_sel = st.selectbox("📍 Nuova Destinazione (Zona | Scaffale)", p_list)
+        col_s1, col_s2 = st.columns([1, 2])
+        with col_s1:
+            usa_scan_box = st.toggle("📸 Scan QR Scatola", key="tgl_box")
         
+        s_sel_key = None
+        if usa_scan_box:
+            res_box = qrcode_scanner(key="scan_box_move")
+            if res_box:
+                # Cerchiamo l'ID corrispondente al nome scansionato
+                match = [k for k in s_options.keys() if res_box.strip().upper() in k.upper()]
+                if match:
+                    s_sel_key = match[0]
+                    st.success(f"Scatola rilevata: {s_sel_key}")
+                else:
+                    st.error(f"Codice '{res_box}' non trovato in inventario.")
+        
+        if not s_sel_key:
+            s_sel_key = st.selectbox("📦 Scegli scatola dalla lista", options=list(s_options.keys()))
+
+        # --- 📍 FASE 2: SELEZIONE DESTINAZIONE ---
+        st.divider()
+        st.subheader("2. Seleziona Nuova Destinazione")
+        
+        # Preparazione lista posizioni per il menu
+        p_options = {f"{p.get('zona', 'N/D')} | {p.get('id_ubicazione') or p.get('id')}": p for p in pos}
+        
+        col_p1, col_p2 = st.columns([1, 2])
+        with col_p1:
+            usa_scan_loc = st.toggle("📸 Scan QR Ubicazione", key="tgl_loc")
+        
+        p_sel = None
+        if usa_scan_loc:
+            res_loc = qrcode_scanner(key="scan_loc_move")
+            if res_loc:
+                # Cerchiamo la posizione che corrisponde al QR (es. "SCAFFALE 1")
+                match_p = [k for k in p_options.keys() if res_loc.strip().upper() in k.upper()]
+                if match_p:
+                    p_sel = match_p[0]
+                    st.success(f"Ubicazione rilevata: {p_sel}")
+                else:
+                    st.warning(f"QR '{res_loc}' non trovato nelle zone configurate. Verrà usato come testo libero.")
+                    # Se il QR non esiste tra le zone, lo creiamo al volo come nuova destinazione
+                    p_sel = f"SCAN | {res_loc.strip().upper()}"
+
+        if not p_sel:
+            p_sel = st.selectbox("📍 Scegli destinazione dalla lista", options=list(p_options.keys()))
+
+        # --- 🚀 FASE 3: CONFERMA ---
+        st.divider()
         if st.button("🚀 CONFERMA SPOSTAMENTO", use_container_width=True):
             try:
-                # Estraiamo l'ID della scatola
                 id_scatola = int(s_sel_key.split(" | ")[0])
                 
-                # Estraiamo Zona e Ubicazione
-                nuova_zona, nuova_ubi = p_sel.split(" | ")
+                # Logica per estrarre zona e ubi dal QR o dalla lista
+                if " | " in p_sel:
+                    nuova_zona, nuova_ubi = p_sel.split(" | ")
+                else:
+                    nuova_zona, nuova_ubi = "VARIE", p_sel
                 
                 with st.spinner("Aggiornamento posizione..."):
                     if db.aggiorna_posizione_scatola(id_scatola, nuova_zona, nuova_ubi):
-                        st.success(f"✅ Spostamento completato! Scatola {id_scatola} ora in: {nuova_zona} - {nuova_ubi}")
-                        time.sleep(1.5)
+                        st.success(f"✅ Spostato con successo in {nuova_zona} - {nuova_ubi}!")
+                        st.balloons()
+                        time.sleep(2)
                         st.rerun()
-                    else:
-                        st.error("Errore nel database durante l'aggiornamento.")
             except Exception as e:
-                st.error(f"Errore tecnico nella selezione: {e}")
-                
-        # Anteprima rapida della scatola selezionata
-        st.markdown("---")
-        s_dati = s_options[s_sel_key]
-        st.caption(f"Stato attuale: {s_dati.get('nome')} si trova in {s_dati.get('zon', 'N/D')} - {s_dati.get('ubi', 'N/D')}")
+                st.error(f"Errore: {e}")
 
     else:
-        if not inv:
-            st.warning("⚠️ Non ci sono scatole nell'inventario. Registrane una prima.")
-        if not pos:
-            st.error("⚠️ Non hai configurato le zone del magazzino. Vai in 'Configura Magazzino'.")
+        st.warning("⚠️ Mancano dati (scatole o zone) per procedere.")
 
 
 # --- ⚙️ CONFIGURA MAGAZZINO ---

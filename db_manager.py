@@ -5,7 +5,6 @@ import cloudinary
 import cloudinary.uploader
 
 # --- CONFIGURAZIONE CLOUDINARY ---
-# Prende le credenziali dai secrets di Streamlit Cloud
 cloudinary.config(
     cloud_name = st.secrets["CLOUDINARY_CLOUD_NAME"],
     api_key = st.secrets["CLOUDINARY_API_KEY"],
@@ -15,7 +14,6 @@ cloudinary.config(
 
 class InventarioDB:
     def __init__(self):
-        # Carica le credenziali Supabase dai secrets di Streamlit
         self.url = st.secrets["SUPABASE_URL"]
         self.key = st.secrets["SUPABASE_KEY"]
         self.supabase: Client = create_client(self.url, self.key)
@@ -42,11 +40,9 @@ class InventarioDB:
             return []
 
     def upload_foto(self, file, nome_scatola, posizione):
-        """Carica una foto su Cloudinary (main, cima, centro, fondo)"""
         try:
             if file is None:
                 return None
-            
             folder_path = f"vhd_wms/{nome_scatola}"
             upload_result = cloudinary.uploader.upload(
                 file,
@@ -96,18 +92,27 @@ class InventarioDB:
             if f_cima: dati["cima_foto"] = f_cima
             if f_cent: dati["centro_foto"] = f_cent
             if f_fond: dati["fondo_foto"] = f_fond
-                
             self.supabase.table("inventario").update(dati).eq("id", id_scatola).execute()
             return True
         except Exception as e:
             st.error(f"Errore aggiornamento: {e}")
             return False
 
+    # --- FUNZIONE AGGIORNATA PER LO SMART SCAN ---
     def aggiorna_posizione_scatola(self, id_scatola, zona, ubi):
+        """Aggiorna zona e ubicazione di una scatola nel database"""
         try:
-            self.supabase.table("inventario").update({"zon": zona, "ubi": ubi}).eq("id", id_scatola).execute()
+            # Puliamo i testi per evitare errori di spazi bianchi
+            nuova_zona = str(zona).strip()
+            nuova_ubi = str(ubi).strip()
+            
+            self.supabase.table("inventario").update({
+                "zon": nuova_zona, 
+                "ubi": nuova_ubi
+            }).eq("id", id_scatola).execute()
             return True
-        except:
+        except Exception as e:
+            st.error(f"Errore DB Spostamento: {e}")
             return False
 
     def cerca_scatola(self, termine):
@@ -150,7 +155,6 @@ class InventarioDB:
 
     def reset_totale_inventario(self):
         try:
-            # Elimina tutti i record dove id non è nullo (cancella tutto)
             self.supabase.table("inventario").delete().neq("id", -1).execute()
             return True
         except:
@@ -162,3 +166,4 @@ class InventarioDB:
             return True
         except:
             return False
+        
